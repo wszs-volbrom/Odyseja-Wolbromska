@@ -1297,6 +1297,7 @@ class UIManager {
     this.game = game;
     this.disclaimerOverlay = document.getElementById("disclaimerOverlay");
     this.menuOverlay = document.getElementById("menuOverlay");
+    this.startGuideOverlay = document.getElementById("startGuideOverlay");
     this.pauseOverlay = document.getElementById("pauseOverlay");
     this.controlsOverlay = document.getElementById("controlsOverlay");
     this.resultOverlay = document.getElementById("resultOverlay");
@@ -1306,7 +1307,17 @@ class UIManager {
     this.unlimitedLivesToggle = document.getElementById("unlimitedLivesToggle");
 
     document.getElementById("acceptDisclaimerButton").addEventListener("click", () => this.showMenu());
-    document.getElementById("startButton").addEventListener("click", () => game.startGame());
+    document.getElementById("startButton").addEventListener("click", () => {
+      if (game.startGuideSeen) {
+        game.startGame();
+      } else {
+        this.showStartGuide();
+      }
+    });
+    document.getElementById("beginGameButton").addEventListener("click", () => {
+      game.startGuideSeen = true;
+      game.startGame();
+    });
     this.unlimitedLivesToggle.addEventListener("click", () => {
       game.unlimitedLives = !game.unlimitedLives;
       this.updateMenu();
@@ -1332,15 +1343,26 @@ class UIManager {
   showMenu() {
     this.disclaimerOverlay.classList.add("hidden");
     this.menuOverlay.classList.remove("hidden");
+    this.startGuideOverlay.classList.add("hidden");
     this.controlsOverlay.classList.add("hidden");
     this.pauseOverlay.classList.add("hidden");
     this.resultOverlay.classList.add("hidden");
     this.updateMenu();
   }
 
+  showStartGuide() {
+    this.disclaimerOverlay.classList.add("hidden");
+    this.menuOverlay.classList.add("hidden");
+    this.startGuideOverlay.classList.remove("hidden");
+    this.controlsOverlay.classList.add("hidden");
+    this.pauseOverlay.classList.add("hidden");
+    this.resultOverlay.classList.add("hidden");
+  }
+
   hideAll() {
     this.disclaimerOverlay.classList.add("hidden");
     this.menuOverlay.classList.add("hidden");
+    this.startGuideOverlay.classList.add("hidden");
     this.controlsOverlay.classList.add("hidden");
     this.pauseOverlay.classList.add("hidden");
     this.resultOverlay.classList.add("hidden");
@@ -1421,6 +1443,7 @@ class GameManager {
     this.currentLevel = CAMPAIGN_LEVELS[this.levelIndex];
     this.level = this.levelGenerator.generate(1, false, this.currentLevel);
     this.state = "menu";
+    this.startGuideSeen = false;
     this.unlimitedLives = false;
     this.collectedCount = 0;
     this.consumedKcal = 0;

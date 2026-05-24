@@ -23,7 +23,7 @@
 
     <section id="menuOverlay" class="overlay hidden">
       <div class="panel">
-        <p class="kicker">V 0.4.3 PREVIEW</p>
+        <p class="kicker">V 0.4.524052026-3 PREVIEW</p>
         <h1>Odyseja Wolbromska</h1>
         <p class="subtitle">Zbieraj pyszności. Zabierz Wolbrzymkę do Dupaju.</p>
         <div class="menu-actions">
@@ -44,6 +44,23 @@
       <div class="panel compact">
         <h2>Pauza</h2>
         <p>Esc wraca do gry. R restartuje poziom.</p>
+      </div>
+    </section>
+
+    <section id="startGuideOverlay" class="overlay hidden">
+      <div class="panel wide">
+        <p class="kicker">Zanim ruszysz</p>
+        <h2>Sterowanie</h2>
+        <ul class="guide-list">
+          <li><strong>Ruch:</strong> A / ← oraz D / →.</li>
+          <li><strong>Skok:</strong> Spacja.</li>
+          <li><strong>Sprint:</strong> naciśnij dwa razy D / → albo dwa razy A / ←. Możesz też przytrzymać Shift.</li>
+          <li><strong>Wyższy skok:</strong> naciśnij Spację drugi raz w powietrzu. Double jump kosztuje 500 kcal.</li>
+          <li><strong>Restart poziomu:</strong> R.</li>
+          <li><strong>Pauza:</strong> Esc.</li>
+        </ul>
+        <p class="mobile-warning">Obecnie brak wsparcia dla urządzeń mobilnych. Gra jest projektowana pod klawiaturę.</p>
+        <button id="beginGameButton">ROZUMIEM - START</button>
       </div>
     </section>
 
@@ -77,6 +94,6 @@
     </section>
   </main>
 
-  <script src="game.js?v=21"></script>
+  <script src="game.js?v=22"></script>
 </body>
 </html>

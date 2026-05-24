@@ -173,6 +173,32 @@ button:focus-visible {
   text-align: left;
 }
 
+.guide-list {
+  display: grid;
+  gap: 10px;
+  margin: 22px 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  line-height: 1.42;
+  text-align: left;
+}
+
+.guide-list strong {
+  color: var(--text);
+}
+
+.mobile-warning {
+  margin: 18px 0 22px;
+  padding: 12px 14px;
+  border: 1px solid rgba(239, 71, 111, 0.38);
+  border-radius: 8px;
+  background: rgba(239, 71, 111, 0.12);
+  color: #ffd9df;
+  font-weight: 700;
+  text-align: left;
+}
+
 @media (max-width: 640px) {
   .game-shell {
     width: 100vw;
