@@ -75,6 +75,27 @@ const COLLECTIBLE_TYPES = [
 ];
 
 const COLLECTIBLE_IMAGES = new Map();
+const ENEMY_SPRITES = {
+  volbromMouse: [
+    "assets/enemies/volbrommice-flying-1.png",
+    "assets/enemies/volbrommice-flying-2.png"
+  ]
+};
+const ENEMY_IMAGES = new Map();
+
+// Add new audio here. Use musicBg for looping/background tracks and sfxEffects for one-shot gameplay sounds.
+const AUDIO_ASSETS = {
+  musicBg: {
+    levelLoop: "assets/audio/music-bg/gameloop-music-main.mp3"
+  },
+  sfxEffects: {
+    jump: "assets/audio/SFX-effects/kloda-jump.mp3",
+    enemyHit: "assets/audio/SFX-effects/enemy-bt.mp3",
+    enemyDefeated: "assets/audio/SFX-effects/enemy-defeated.mp3",
+    collectible: "assets/audio/SFX-effects/pysznosci.mp3",
+    hungerWarning: "assets/audio/SFX-effects/dajmijesc.mp3"
+  }
+};
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -93,6 +114,82 @@ function formatTime(seconds) {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${String(mins).padStart(2, "0")}:${secs.toFixed(2).padStart(5, "0")}`;
+}
+
+function makeEdgeTransparentCanvas(img) {
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0);
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = pixels.data;
+
+  const width = canvas.width;
+  const height = canvas.height;
+  const visited = new Uint8Array(width * height);
+  const stack = [];
+  const isBackground = (idx) => {
+    const i = idx * 4;
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const a = data[i + 3];
+    const greenScreen = g > 145 && r < 120 && b < 125;
+    const whiteScreen = r > 242 && g > 242 && b > 242;
+    const checkerLight = r > 226 && g > 226 && b > 226;
+    const checkerGray = Math.abs(r - g) < 5 && Math.abs(g - b) < 5 && r > 215;
+    return a < 8 || greenScreen || whiteScreen || checkerLight || checkerGray;
+  };
+
+  for (let x = 0; x < width; x += 1) {
+    stack.push(x, (height - 1) * width + x);
+  }
+  for (let y = 0; y < height; y += 1) {
+    stack.push(y * width, y * width + width - 1);
+  }
+
+  while (stack.length) {
+    const idx = stack.pop();
+    if (visited[idx] || !isBackground(idx)) continue;
+    visited[idx] = 1;
+    data[idx * 4 + 3] = 0;
+    const x = idx % width;
+    const y = Math.floor(idx / width);
+    if (x > 0) stack.push(idx - 1);
+    if (x < width - 1) stack.push(idx + 1);
+    if (y > 0) stack.push(idx - width);
+    if (y < height - 1) stack.push(idx + width);
+  }
+
+  ctx.putImageData(pixels, 0, 0);
+
+  let minX = width;
+  let minY = height;
+  let maxX = 0;
+  let maxY = 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (data[(y * width + x) * 4 + 3] > 12) {
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+  }
+  if (minX > maxX || minY > maxY) return canvas;
+
+  const padding = 2;
+  minX = Math.max(0, minX - padding);
+  minY = Math.max(0, minY - padding);
+  maxX = Math.min(width - 1, maxX + padding);
+  maxY = Math.min(height - 1, maxY + padding);
+  const trimmed = document.createElement("canvas");
+  trimmed.width = maxX - minX + 1;
+  trimmed.height = maxY - minY + 1;
+  trimmed.getContext("2d").drawImage(canvas, minX, minY, trimmed.width, trimmed.height, 0, 0, trimmed.width, trimmed.height);
+  return trimmed;
 }
 
 class InputManager {
@@ -232,14 +329,17 @@ class HungerSystem {
   constructor(game) {
     this.game = game;
     this.value = CONFIG.hunger.max;
+    this.warningReady = true;
   }
 
   reset() {
     this.value = CONFIG.hunger.max;
+    this.warningReady = true;
   }
 
   add(amount) {
     this.value = clamp(this.value + amount, 0, CONFIG.hunger.max);
+    if (this.value > 650) this.warningReady = true;
   }
 
   update(dt, sprinting) {
@@ -249,6 +349,11 @@ class HungerSystem {
     const levelPressure = this.game.currentLevel ? this.game.currentLevel.difficulty * 18 : Math.max(0, this.game.levelNumber - 1) * 5;
     drain += levelPressure;
     this.value = clamp(this.value - drain * dt, 0, CONFIG.hunger.max);
+    if (this.value <= 500 && this.warningReady) {
+      this.warningReady = false;
+      this.game.audio.playHungerWarning();
+      this.game.addFloatingText("JESTEM GŁODNA!!!!", this.game.player.x + this.game.player.w / 2, this.game.player.y - 34, "#ef476f");
+    }
     if (this.value <= 0) {
       this.game.addFloatingText("0 kcal!", this.game.player.x, this.game.player.y - 24, "#ef476f");
       this.game.playerDie(false);
@@ -283,6 +388,10 @@ class CollisionSystem {
 
     for (const platform of platforms) {
       if (!rectsOverlap(box, platform)) continue;
+      if (CollisionSystem.tryStepUp(entity, platform, platforms)) {
+        box = entity.bounds;
+        continue;
+      }
       if (entity.vx > 0) entity.x = platform.x - entity.w;
       else if (entity.vx < 0) entity.x = platform.x + platform.w;
       entity.vx = 0;
@@ -305,6 +414,28 @@ class CollisionSystem {
       }
       box = entity.bounds;
     }
+  }
+
+  static tryStepUp(entity, obstacle, platforms) {
+    if (!entity.onGround && Math.abs(entity.vy) > 30) return false;
+    const feet = entity.y + entity.h;
+    const stepHeight = 18;
+    const obstacleTop = obstacle.y;
+    const canStep = obstacleTop < feet && feet - obstacleTop <= stepHeight;
+    if (!canStep) return false;
+
+    const oldY = entity.y;
+    entity.y = obstacleTop - entity.h;
+    const steppedBox = entity.bounds;
+    const blocked = platforms.some((platform) => platform !== obstacle && rectsOverlap(steppedBox, platform));
+    if (blocked) {
+      entity.y = oldY;
+      return false;
+    }
+    entity.vy = Math.min(entity.vy, 0);
+    entity.onGround = true;
+    entity.lastGroundY = obstacleTop;
+    return true;
   }
 
   static hasGroundAhead(entity, platforms, dir, distance = 18) {
@@ -420,6 +551,25 @@ function loadCollectibleImages() {
   }
 }
 
+function loadEnemyImages() {
+  for (const [key, paths] of Object.entries(ENEMY_SPRITES)) {
+    if (ENEMY_IMAGES.has(key)) continue;
+    const frames = [];
+    ENEMY_IMAGES.set(key, frames);
+    paths.forEach((path) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          frames.push(makeEdgeTransparentCanvas(img));
+        } catch {
+          frames.push(img);
+        }
+      };
+      img.src = path;
+    });
+  }
+}
+
 class PlayerController {
   constructor(game) {
     this.game = game;
@@ -502,6 +652,7 @@ class PlayerController {
       this.onGround = false;
       this.jumpCount += 1;
       this.game.hunger.spendJumpCost();
+      this.game.audio.playJump();
       return;
     }
 
@@ -511,6 +662,7 @@ class PlayerController {
       this.jumpCount += 1;
       this.game.hunger.add(-CONFIG.hunger.doubleJumpCost);
       this.game.addFloatingText("-500 kcal", this.x + this.w / 2, this.y - 24, "#45d4ff");
+      this.game.audio.playJump();
     }
   }
 
@@ -528,7 +680,10 @@ class PlayerController {
     this.vy = -260;
     this.game.hunger.add(-220);
     this.game.addFloatingText("-1 życie", this.x, this.y - 24, "#ef476f");
-    if (this.lives <= 0) this.game.gameOver();
+    if (this.lives <= 0) {
+      this.game.audio.playEnemyDefeated();
+      this.game.gameOver();
+    }
   }
 
   render(ctx, camera, sprites, time) {
@@ -598,6 +753,7 @@ class CollectibleItem {
       if (this.type.speedBoost) game.player.speedBoost = this.type.speedBoost;
       const label = this.type.speedBoost ? `+${this.type.hunger} kcal +boost` : `+${this.type.hunger} kcal`;
       game.addFloatingText(label, this.x, this.y - 12, this.type.color);
+      game.audio.playCollectible();
     }
   }
 
@@ -675,7 +831,10 @@ class EnemyBase {
     game.addFloatingText(`${this.name} -1`, this.x, this.y - 10, "#f7d774");
     if (this.hp <= 0) {
       this.dead = true;
+      game.audio.playEnemyDefeated();
       game.addFloatingText("Bęc!", this.x, this.y - 24, "#f7d774");
+    } else {
+      game.audio.playEnemyHit();
     }
   }
 
@@ -727,13 +886,39 @@ class EnemyBase {
 class WalkerEnemy extends EnemyBase {
   constructor(x, y) {
     super(x, y, { name: "Andziaks", hp: 1, damage: 1, vx: 55, color: "#d84f76", patrol: 180 });
+    this.hasThrown = false;
+    this.turnCooldown = 0;
   }
 
   update(dt, game) {
+    if (this.turnCooldown > 0) this.turnCooldown -= dt;
     this.vx = 55 * this.dir;
+    const intendedDir = this.dir;
     super.update(dt, game);
-    if (this.x <= this.patrolMin || this.x + this.w >= this.patrolMax) this.dir *= -1;
-    if (this.onGround && !CollisionSystem.hasGroundAhead(this, game.level.platforms, this.dir)) this.dir *= -1;
+    this.tryThrow(game);
+
+    const hitWallOrStep = this.onGround && this.vx === 0;
+    const leftPatrol = this.x <= this.patrolMin;
+    const rightPatrol = this.x + this.w >= this.patrolMax;
+    const edge = this.onGround && !CollisionSystem.hasGroundAhead(this, game.level.platforms, intendedDir, 26);
+    if ((hitWallOrStep || leftPatrol || rightPatrol || edge) && this.turnCooldown <= 0) {
+      this.dir = -intendedDir;
+      this.x = clamp(this.x + this.dir * 8, this.patrolMin + 2, this.patrolMax - this.w - 2);
+      this.vx = 55 * this.dir;
+      this.turnCooldown = 0.18;
+    }
+  }
+
+  tryThrow(game) {
+    if (this.hasThrown) return;
+    const player = game.player;
+    const dx = player.x + player.w / 2 - (this.x + this.w / 2);
+    const dy = Math.abs((player.y + player.h / 2) - (this.y + this.h / 2));
+    if (Math.abs(dx) > 360 || dy > 115) return;
+    this.dir = dx > 0 ? 1 : -1;
+    this.hasThrown = true;
+    game.projectiles.push(new EnemyProjectile(this.x + this.w / 2, this.y + 14, this.dir, "andziaks"));
+    game.addFloatingText("O nie!", this.x + this.w / 2, this.y - 16, "#ffd166");
   }
 }
 
@@ -832,16 +1017,69 @@ class TankEnemy extends EnemyBase {
 
 class FlyerEnemy extends EnemyBase {
   constructor(x, y) {
-    super(x, y, { name: "Duch Myszy Wolbromskiej", hp: 1, damage: 1, w: 44, h: 34, vx: 70, color: "#36c7d0", patrol: 220 });
+    super(x, y, { name: "Duch Myszy Wolbromskiej", hp: 1, damage: 1, w: 62, h: 44, vx: 70, color: "#36c7d0", patrol: 220 });
     this.baseY = y;
+    this.hoverY = y;
+    this.groundedTargetY = y;
     this.phase = Math.random() * Math.PI * 2;
+    this.animTime = Math.random() * 0.4;
   }
 
   update(dt, game) {
+    this.animTime += dt;
     this.x += 70 * this.dir * dt;
-    this.y = this.baseY + Math.sin(performance.now() / 420 + this.phase) * 34;
+    const player = game.player;
+    const distanceToPlayer = Math.abs((player.x + player.w / 2) - (this.x + this.w / 2));
+    const idleY = this.baseY;
+    const chaseY = clamp(player.y + player.h * 0.32 - this.h / 2, 82, CONFIG.groundY - this.h - 10);
+    if (player.onGround) {
+      this.groundedTargetY = distanceToPlayer < 520 ? chaseY : idleY;
+    }
+    const targetY = this.groundedTargetY;
+    this.hoverY = lerp(this.hoverY, targetY, 1 - Math.pow(0.02, dt));
+    this.y = this.hoverY + Math.sin(game.time * 4.8 + this.phase) * 26 + Math.sin(game.time * 2.1 + this.phase * 0.7) * 10;
     if (this.x <= this.patrolMin || this.x + this.w >= this.patrolMax) this.dir *= -1;
     if (this.hitFlash > 0) this.hitFlash -= dt;
+  }
+
+  render(ctx, camera) {
+    if (this.dead) return;
+    const frames = ENEMY_IMAGES.get("volbromMouse") || [];
+    if (!frames.length) {
+      super.render(ctx, camera);
+      return;
+    }
+
+    const frame = frames[Math.floor(this.animTime * 8) % frames.length];
+    const scale = Math.min((this.w + 36) / frame.width, (this.h + 30) / frame.height);
+    const drawW = frame.width * scale;
+    const drawH = frame.height * scale;
+    const x = Math.round(this.x - camera.x + this.w / 2 - drawW / 2);
+    const y = Math.round(this.y - camera.y + this.h / 2 - drawH / 2);
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = this.hitFlash > 0 ? 0.68 : 1;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.35)";
+    ctx.shadowBlur = 7;
+    ctx.shadowOffsetY = 3;
+    if (this.dir < 0) {
+      ctx.translate(x + drawW, y);
+      ctx.scale(-1, 1);
+      ctx.drawImage(frame, 0, 0, drawW, drawH);
+    } else {
+      ctx.drawImage(frame, x, y, drawW, drawH);
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.shadowColor = "transparent";
+    ctx.fillStyle = "#fff7dd";
+    ctx.font = "700 10px Segoe UI";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(this.name, Math.round(this.x - camera.x + this.w / 2), Math.round(this.y - camera.y - 8));
+    ctx.restore();
   }
 }
 
@@ -1020,13 +1258,13 @@ class EnemyProjectile {
   constructor(x, y, direction, type = "fit") {
     this.x = x;
     this.y = y;
-    this.w = 26;
-    this.h = 18;
-    this.vx = 255 * direction;
-    this.vy = -18;
-    this.life = 3.2;
-    this.dead = false;
     this.type = type;
+    this.w = type === "andziaks" ? 22 : 26;
+    this.h = type === "andziaks" ? 22 : 18;
+    this.vx = (type === "andziaks" ? 215 : 255) * direction;
+    this.vy = type === "andziaks" ? -95 : -18;
+    this.life = type === "andziaks" ? 4.2 : 3.2;
+    this.dead = false;
   }
 
   get bounds() {
@@ -1041,9 +1279,14 @@ class EnemyProjectile {
     if (this.life <= 0) this.dead = true;
     if (!this.dead && rectsOverlap(this.bounds, game.player.bounds)) {
       this.dead = true;
-      game.player.damage(this.x, 1);
-      game.hunger.add(-140);
-      game.addFloatingText("-140 kcal", game.player.x, game.player.y - 38, "#9cffb7");
+      if (this.type === "andziaks") {
+        game.player.damage(this.x, 1);
+        game.addFloatingText("Andziaks trafia!", game.player.x, game.player.y - 42, "#ffd166");
+      } else {
+        game.player.damage(this.x, 1);
+        game.hunger.add(-140);
+        game.addFloatingText("-140 kcal", game.player.x, game.player.y - 38, "#9cffb7");
+      }
     }
   }
 
@@ -1051,16 +1294,16 @@ class EnemyProjectile {
     const x = Math.round(this.x - camera.x);
     const y = Math.round(this.y - camera.y);
     ctx.save();
-    ctx.fillStyle = "#9cffb7";
+    ctx.fillStyle = this.type === "andziaks" ? "#ffd166" : "#9cffb7";
     ctx.beginPath();
-    ctx.roundRect(x, y, this.w, this.h, 5);
+    ctx.roundRect(x, y, this.w, this.h, this.type === "andziaks" ? 11 : 5);
     ctx.fill();
-    ctx.strokeStyle = "#185c31";
+    ctx.strokeStyle = this.type === "andziaks" ? "#7a3f18" : "#185c31";
     ctx.strokeRect(x, y, this.w, this.h);
-    ctx.fillStyle = "#185c31";
+    ctx.fillStyle = this.type === "andziaks" ? "#7a3f18" : "#185c31";
     ctx.font = "800 8px Segoe UI";
     ctx.textAlign = "center";
-    ctx.fillText("FIT", x + this.w / 2, y + 12);
+    ctx.fillText(this.type === "andziaks" ? "BT" : "FIT", x + this.w / 2, y + (this.type === "andziaks" ? 14 : 12));
     ctx.restore();
   }
 }
@@ -1300,11 +1543,16 @@ class UIManager {
     this.startGuideOverlay = document.getElementById("startGuideOverlay");
     this.pauseOverlay = document.getElementById("pauseOverlay");
     this.controlsOverlay = document.getElementById("controlsOverlay");
+    this.settingsOverlay = document.getElementById("settingsOverlay");
     this.resultOverlay = document.getElementById("resultOverlay");
     this.resultTitle = document.getElementById("resultTitle");
     this.resultDetails = document.getElementById("resultDetails");
     this.bestTimeLabel = document.getElementById("bestTimeLabel");
     this.unlimitedLivesToggle = document.getElementById("unlimitedLivesToggle");
+    this.musicVolumeSlider = document.getElementById("musicVolumeSlider");
+    this.sfxVolumeSlider = document.getElementById("sfxVolumeSlider");
+    this.musicVolumeValue = document.getElementById("musicVolumeValue");
+    this.sfxVolumeValue = document.getElementById("sfxVolumeValue");
 
     document.getElementById("acceptDisclaimerButton").addEventListener("click", () => this.showMenu());
     document.getElementById("startButton").addEventListener("click", () => {
@@ -1327,11 +1575,22 @@ class UIManager {
       this.updateMenu();
     });
     document.getElementById("controlsButton").addEventListener("click", () => this.showControls());
+    document.getElementById("settingsButton").addEventListener("click", () => this.showSettings());
     document.getElementById("backButton").addEventListener("click", () => this.showMenu());
+    document.getElementById("settingsBackButton").addEventListener("click", () => this.showMenu());
     document.getElementById("nextLevelButton").addEventListener("click", () => game.nextLevel());
     document.getElementById("retryButton").addEventListener("click", () => game.restartLevel());
     document.getElementById("menuButton").addEventListener("click", () => game.returnToMenu());
+    this.musicVolumeSlider.addEventListener("input", () => {
+      game.audio.setMusicVolume(Number(this.musicVolumeSlider.value) / 100);
+      this.updateSettingsLabels();
+    });
+    this.sfxVolumeSlider.addEventListener("input", () => {
+      game.audio.setSfxVolume(Number(this.sfxVolumeSlider.value) / 100);
+      this.updateSettingsLabels();
+    });
     this.updateMenu();
+    this.syncSettingsControls();
   }
 
   updateMenu() {
@@ -1340,14 +1599,27 @@ class UIManager {
     this.unlimitedLivesToggle.textContent = `Unlimited lives: ${this.game.unlimitedLives ? "YES" : "NO"}`;
   }
 
+  syncSettingsControls() {
+    this.musicVolumeSlider.value = Math.round(this.game.audio.musicVolume * 100);
+    this.sfxVolumeSlider.value = Math.round(this.game.audio.sfxVolume * 100);
+    this.updateSettingsLabels();
+  }
+
+  updateSettingsLabels() {
+    this.musicVolumeValue.textContent = `${Math.round(this.game.audio.musicVolume * 100)}%`;
+    this.sfxVolumeValue.textContent = `${Math.round(this.game.audio.sfxVolume * 100)}%`;
+  }
+
   showMenu() {
     this.disclaimerOverlay.classList.add("hidden");
     this.menuOverlay.classList.remove("hidden");
     this.startGuideOverlay.classList.add("hidden");
     this.controlsOverlay.classList.add("hidden");
+    this.settingsOverlay.classList.add("hidden");
     this.pauseOverlay.classList.add("hidden");
     this.resultOverlay.classList.add("hidden");
     this.updateMenu();
+    this.syncSettingsControls();
   }
 
   showStartGuide() {
@@ -1355,6 +1627,7 @@ class UIManager {
     this.menuOverlay.classList.add("hidden");
     this.startGuideOverlay.classList.remove("hidden");
     this.controlsOverlay.classList.add("hidden");
+    this.settingsOverlay.classList.add("hidden");
     this.pauseOverlay.classList.add("hidden");
     this.resultOverlay.classList.add("hidden");
   }
@@ -1364,13 +1637,22 @@ class UIManager {
     this.menuOverlay.classList.add("hidden");
     this.startGuideOverlay.classList.add("hidden");
     this.controlsOverlay.classList.add("hidden");
+    this.settingsOverlay.classList.add("hidden");
     this.pauseOverlay.classList.add("hidden");
     this.resultOverlay.classList.add("hidden");
   }
 
   showControls() {
     this.menuOverlay.classList.add("hidden");
+    this.settingsOverlay.classList.add("hidden");
     this.controlsOverlay.classList.remove("hidden");
+  }
+
+  showSettings() {
+    this.menuOverlay.classList.add("hidden");
+    this.controlsOverlay.classList.add("hidden");
+    this.settingsOverlay.classList.remove("hidden");
+    this.syncSettingsControls();
   }
 
   showPause(show) {
@@ -1425,6 +1707,114 @@ class UIManager {
   }
 }
 
+class AudioManager {
+  constructor() {
+    this.musicVolume = this.loadVolume("music", 1);
+    this.sfxVolume = this.loadVolume("sfx", 1);
+    this.musicBaseVolume = 0.36;
+    this.music = new Audio(AUDIO_ASSETS.musicBg.levelLoop);
+    this.music.loop = true;
+    this.applyMusicVolume();
+    this.jumpPool = this.createPool(AUDIO_ASSETS.sfxEffects.jump, 5, 0.62);
+    this.enemyHitPool = this.createPool(AUDIO_ASSETS.sfxEffects.enemyHit, 4, 0.62);
+    this.enemyDefeatedPool = this.createPool(AUDIO_ASSETS.sfxEffects.enemyDefeated, 4, 0.68);
+    this.collectiblePool = this.createPool(AUDIO_ASSETS.sfxEffects.collectible, 5, 0.58);
+    this.hungerWarningPool = this.createPool(AUDIO_ASSETS.sfxEffects.hungerWarning, 2, 0.72);
+    this.jumpIndex = 0;
+    this.enemyHitIndex = 0;
+    this.enemyDefeatedIndex = 0;
+    this.collectibleIndex = 0;
+    this.hungerWarningIndex = 0;
+  }
+
+  createPool(src, count, volume) {
+    return Array.from({ length: count }, () => {
+      const sound = new Audio(src);
+      sound.baseVolume = volume;
+      sound.volume = volume * this.sfxVolume;
+      return sound;
+    });
+  }
+
+  loadVolume(type, fallback) {
+    try {
+      const raw = localStorage.getItem(`odysejaWolbromska.volume.${type}`);
+      return raw === null ? fallback : clamp(Number(raw), 0, 1);
+    } catch {
+      return fallback;
+    }
+  }
+
+  saveVolume(type, value) {
+    try {
+      localStorage.setItem(`odysejaWolbromska.volume.${type}`, String(value));
+    } catch {
+      // Storage can be blocked for local files; volume still works for the current session.
+    }
+  }
+
+  setMusicVolume(value) {
+    this.musicVolume = clamp(value, 0, 1);
+    this.applyMusicVolume();
+    this.saveVolume("music", this.musicVolume);
+  }
+
+  setSfxVolume(value) {
+    this.sfxVolume = clamp(value, 0, 1);
+    this.updateSfxVolumes();
+    this.saveVolume("sfx", this.sfxVolume);
+  }
+
+  applyMusicVolume() {
+    this.music.volume = this.musicBaseVolume * this.musicVolume;
+  }
+
+  updateSfxVolumes() {
+    const pools = [this.jumpPool, this.enemyHitPool, this.enemyDefeatedPool, this.collectiblePool, this.hungerWarningPool].filter(Boolean);
+    pools.flat().forEach((sound) => {
+      sound.volume = (sound.baseVolume || 1) * this.sfxVolume;
+    });
+  }
+
+  playFromPool(pool, indexKey) {
+    const sound = pool[this[indexKey]];
+    this[indexKey] = (this[indexKey] + 1) % pool.length;
+    sound.currentTime = 0;
+    sound.play().catch(() => {});
+  }
+
+  playMusic() {
+    if (!this.music.paused) return;
+    this.music.play().catch(() => {
+      // Browser may block audio until the next direct user gesture.
+    });
+  }
+
+  pauseMusic() {
+    this.music.pause();
+  }
+
+  playJump() {
+    this.playFromPool(this.jumpPool, "jumpIndex");
+  }
+
+  playEnemyHit() {
+    this.playFromPool(this.enemyHitPool, "enemyHitIndex");
+  }
+
+  playEnemyDefeated() {
+    this.playFromPool(this.enemyDefeatedPool, "enemyDefeatedIndex");
+  }
+
+  playCollectible() {
+    this.playFromPool(this.collectiblePool, "collectibleIndex");
+  }
+
+  playHungerWarning() {
+    this.playFromPool(this.hungerWarningPool, "hungerWarningIndex");
+  }
+}
+
 class GameManager {
   constructor() {
     this.canvas = document.getElementById("gameCanvas");
@@ -1435,6 +1825,7 @@ class GameManager {
     this.player = new PlayerController(this);
     this.hunger = new HungerSystem(this);
     this.timer = new SpeedrunTimer();
+    this.audio = new AudioManager();
     this.speedrunMode = false;
     this.ui = new UIManager(this);
     this.levelGenerator = new ProceduralLevelGenerator();
@@ -1464,6 +1855,7 @@ class GameManager {
 
     this.sprites.load();
     loadCollectibleImages();
+    loadEnemyImages();
     requestAnimationFrame((now) => this.loop(now));
   }
 
@@ -1500,6 +1892,7 @@ class GameManager {
     this.sceneFreezeTime = null;
     this.state = "playing";
     this.ui.hideAll();
+    this.audio.playMusic();
   }
 
   generateLevel() {
@@ -1534,6 +1927,7 @@ class GameManager {
     this.sceneFreezeTime = null;
     this.state = "playing";
     this.ui.hideAll();
+    this.audio.playMusic();
   }
 
   restartLevel() {
@@ -1550,11 +1944,13 @@ class GameManager {
     this.sceneFreezeTime = null;
     this.state = "playing";
     this.ui.hideAll();
+    this.audio.playMusic();
   }
 
   returnToMenu() {
     this.state = "menu";
     this.timer.stop();
+    this.audio.pauseMusic();
     this.dimAlpha = 0;
     this.dimTarget = 0;
     this.sceneFreezeTime = null;
@@ -1564,12 +1960,14 @@ class GameManager {
   pause() {
     this.state = "paused";
     this.timer.stop();
+    this.audio.pauseMusic();
     this.ui.showPause(true);
   }
 
   resume() {
     this.state = "playing";
     this.timer.start();
+    this.audio.playMusic();
     this.ui.showPause(false);
   }
 
@@ -1577,6 +1975,7 @@ class GameManager {
     if (this.state !== "playing") return;
     if (!this.unlimitedLives) this.player.lives -= 1;
     if (fromPit) this.addFloatingText("Przepaść!", this.player.x, this.player.y - 20, "#ef476f");
+    this.audio.playEnemyDefeated();
     if (this.player.lives <= 0) {
       this.gameOver();
     } else {
@@ -1588,6 +1987,7 @@ class GameManager {
   gameOver() {
     this.state = "gameover";
     this.timer.stop();
+    this.audio.pauseMusic();
     this.dimTarget = 0.82;
     this.sceneFreezeTime = this.time;
     this.ui.showResult(
@@ -1609,6 +2009,7 @@ class GameManager {
     if (this.state !== "playing") return;
     this.state = "complete";
     this.timer.stop();
+    this.audio.pauseMusic();
     this.dimTarget = 0.74;
     this.sceneFreezeTime = this.time;
     const bestBefore = SaveSystem.getBestTime(this.speedrunMode);

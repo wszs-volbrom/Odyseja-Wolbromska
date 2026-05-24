@@ -199,6 +199,32 @@ button:focus-visible {
   text-align: left;
 }
 
+.settings-list {
+  display: grid;
+  gap: 16px;
+  margin: 22px 0;
+}
+
+.volume-row {
+  display: grid;
+  grid-template-columns: 82px 1fr 48px;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-weight: 700;
+  text-align: left;
+}
+
+.volume-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.volume-row strong {
+  color: var(--text);
+  text-align: right;
+}
+
 @media (max-width: 640px) {
   .game-shell {
     width: 100vw;

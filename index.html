@@ -23,19 +23,20 @@
 
     <section id="menuOverlay" class="overlay hidden">
       <div class="panel">
-        <p class="kicker">V 0.4.524052026-3 PREVIEW</p>
+        <p class="kicker">V 0.4.624052026-1 PREVIEW</p>
         <h1>Odyseja Wolbromska</h1>
         <p class="subtitle">Zbieraj pyszności. Zabierz Wolbrzymkę do Dupaju.</p>
         <div class="menu-actions">
           <button id="startButton">Start!</button>
           <button id="resetBestButton">Zresetuj HiScore</button>
           <button id="controlsButton">Sterowanie</button>
+          <button id="settingsButton">Ustawienia</button>
         </div>
         <div class="debug-cheats">
           <p class="small">Cheats (debug only)</p>
           <button id="unlimitedLivesToggle">Unlimited lives: NO</button>
         </div>
-        <p class="small">Sprint: dwa razy D / → albo dwa razy A / ←.</p>
+        <p class="small">@wszs.volbrom - From patostream to platformer.</p>
         <p id="bestTimeLabel" class="small"></p>
       </div>
     </section>
@@ -81,6 +82,25 @@
       </div>
     </section>
 
+    <section id="settingsOverlay" class="overlay hidden">
+      <div class="panel compact">
+        <h2>Ustawienia</h2>
+        <div class="settings-list">
+          <label class="volume-row" for="musicVolumeSlider">
+            <span>Muzyka</span>
+            <input id="musicVolumeSlider" type="range" min="0" max="100" value="100">
+            <strong id="musicVolumeValue">100%</strong>
+          </label>
+          <label class="volume-row" for="sfxVolumeSlider">
+            <span>Efekty</span>
+            <input id="sfxVolumeSlider" type="range" min="0" max="100" value="100">
+            <strong id="sfxVolumeValue">100%</strong>
+          </label>
+        </div>
+        <button id="settingsBackButton">Wróć</button>
+      </div>
+    </section>
+
     <section id="resultOverlay" class="overlay hidden">
       <div class="panel compact">
         <h2 id="resultTitle">Poziom ukończony</h2>
@@ -94,6 +114,6 @@
     </section>
   </main>
 
-  <script src="game.js?v=22"></script>
+  <script src="game.js?v=31"></script>
 </body>
 </html>
