@@ -52,7 +52,8 @@ const PLAYER_SPRITES = {
     "assets/player/processed/k01-walk-step1.png",
     "assets/player/processed/k01-walk-step2.png",
     "assets/player/processed/k01-walk-step3.png",
-    "assets/player/processed/k01-walk-step2.png"
+    "assets/player/processed/k01-walk-step2.png",
+    "assets/player/processed/k01-walk-step1.png"
   ],
   jump: ["assets/player/processed/k01-jump-step1.png"],
   fall: ["assets/player/processed/k01-jump-step2-and-fall.png"],
@@ -62,6 +63,14 @@ const PLAYER_SPRITES = {
     "assets/player/processed/k01-walk-step3.png",
     "assets/player/processed/k01-walk-step2.png"
   ]
+};
+
+const PLAYER_ANIMATION_FPS = {
+  idle: 1,
+  walk: 8,
+  sprint: 13,
+  jump: 1,
+  fall: 1
 };
 
 const COLLECTIBLE_TYPES = [
@@ -459,12 +468,14 @@ class SpriteLoader {
 
   async load() {
     const entries = Object.entries(PLAYER_SPRITES);
-    const promises = entries.flatMap(([state, paths]) => paths.map((path) => this.loadImage(path, state)));
-    await Promise.all(promises);
+    await Promise.all(entries.map(async ([state, paths]) => {
+      const frames = await Promise.all(paths.map((path) => this.loadImage(path)));
+      this.frames.set(state, frames.filter(Boolean));
+    }));
     this.ready = true;
   }
 
-  loadImage(src, state) {
+  loadImage(src) {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
@@ -474,13 +485,11 @@ class SpriteLoader {
         } catch {
           processed = img;
         }
-        if (!this.frames.has(state)) this.frames.set(state, []);
-        this.frames.get(state).push(processed);
-        resolve();
+        resolve(processed);
       };
       img.onerror = () => {
         this.failed.push(src);
-        resolve();
+        resolve(null);
       };
       img.src = src;
     });
@@ -536,7 +545,8 @@ class SpriteLoader {
   getFrame(state, time) {
     const frames = this.frames.get(state) || this.frames.get("idle") || [];
     if (!frames.length) return null;
-    const index = Math.floor(time * 9) % frames.length;
+    const fps = PLAYER_ANIMATION_FPS[state] || 8;
+    const index = Math.floor(time * fps) % frames.length;
     return frames[index];
   }
 }
