@@ -33,14 +33,16 @@ const CAMPAIGN_LEVELS = [
   { label: "1-3", world: "OSIEDLE WOLBROM", difficulty: 0.36, length: 7200, boss: false, theme: "blocks" },
   { label: "2-1", world: "RYNEK WOLBROM", difficulty: 0.52, length: 7600, boss: false, theme: "market" },
   { label: "2-2", world: "RYNEK WOLBROM", difficulty: 0.7, length: 8400, boss: false, theme: "market" },
-  { label: "2-3", world: "RYNEK WOLBROM", difficulty: 0.9, length: 7000, boss: true, theme: "market" }
+  { label: "2-3", world: "RYNEK WOLBROM", difficulty: 0.9, length: 7000, boss: true, theme: "market" },
+  { label: "2-4", world: "TEST BOSS FIGHT", difficulty: 1, length: 1280, boss: true, bossFight: true, fixedCamera: true, theme: "bossfight" }
 ];
 
 const THEME_PALETTES = {
   suburbs: { skyTop: "#b7c9c1", skyMid: "#91a99b", skyBottom: "#6f846f", far: "rgba(84, 105, 88, 0.42)", near: "rgba(80, 95, 72, 0.62)" },
   center: { skyTop: "#b4bdc8", skyMid: "#909aa8", skyBottom: "#6f7884", far: "rgba(90, 96, 105, 0.5)", near: "rgba(63, 68, 76, 0.7)" },
   blocks: { skyTop: "#a9b0ba", skyMid: "#858d98", skyBottom: "#646b75", far: "rgba(78, 84, 94, 0.58)", near: "rgba(48, 54, 63, 0.76)" },
-  market: { skyTop: "#c2b9aa", skyMid: "#a99e8e", skyBottom: "#7d746b", far: "rgba(100, 82, 70, 0.5)", near: "rgba(70, 55, 49, 0.74)" }
+  market: { skyTop: "#c2b9aa", skyMid: "#a99e8e", skyBottom: "#7d746b", far: "rgba(100, 82, 70, 0.5)", near: "rgba(70, 55, 49, 0.74)" },
+  bossfight: { skyTop: "#3f304d", skyMid: "#28203a", skyBottom: "#171421", far: "rgba(255, 209, 102, 0.16)", near: "rgba(239, 71, 111, 0.28)" }
 };
 
 const PLAYER_SPRITES = {
@@ -1308,6 +1310,155 @@ class EnemyProjectile {
   }
 }
 
+class TestBossProjectile {
+  constructor(x, y, targetX, targetY, variant = "bolt") {
+    this.x = x;
+    this.y = y;
+    this.variant = variant;
+    this.w = variant === "wide" ? 34 : 24;
+    this.h = variant === "wide" ? 14 : 18;
+    const dx = targetX - x;
+    const dy = targetY - y;
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    const speed = variant === "lob" ? 210 : variant === "wide" ? 285 : 250;
+    this.vx = dx / distance * speed;
+    this.vy = dy / distance * speed + (variant === "lob" ? -155 : 0);
+    this.life = 4.4;
+    this.dead = false;
+    this.phase = Math.random() * Math.PI * 2;
+  }
+
+  get bounds() {
+    return { x: this.x, y: this.y, w: this.w, h: this.h };
+  }
+
+  update(dt, game) {
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    if (this.variant === "lob") this.vy += 440 * dt;
+    if (this.variant === "wave") this.y += Math.sin(game.time * 10 + this.phase) * 75 * dt;
+    this.life -= dt;
+    if (this.life <= 0 || this.y > CONFIG.height + 160) this.dead = true;
+    if (!this.dead && rectsOverlap(this.bounds, game.player.bounds)) {
+      this.dead = true;
+      game.player.damage(this.x, 1);
+      game.hunger.add(-120);
+      game.addFloatingText("-120 kcal", game.player.x, game.player.y - 38, "#ff8fab");
+    }
+  }
+
+  render(ctx, camera) {
+    const x = Math.round(this.x - camera.x);
+    const y = Math.round(this.y - camera.y);
+    ctx.save();
+    ctx.fillStyle = this.variant === "lob" ? "#ffd166" : this.variant === "wave" ? "#45d4ff" : "#ef476f";
+    ctx.beginPath();
+    ctx.roundRect(x, y, this.w, this.h, 7);
+    ctx.fill();
+    ctx.strokeStyle = "#211713";
+    ctx.strokeRect(x, y, this.w, this.h);
+    ctx.fillStyle = "#211713";
+    ctx.font = "800 8px Segoe UI";
+    ctx.textAlign = "center";
+    ctx.fillText(this.variant === "wide" ? "!!!" : ">", x + this.w / 2, y + 11);
+    ctx.restore();
+  }
+}
+
+class TestArenaBossEnemy extends EnemyBase {
+  constructor(x, y) {
+    super(x, y, { name: "TEST BOSS", hp: 8, damage: 1, w: 84, h: 78, vx: 155, color: "#ef476f", patrol: 520 });
+    this.dir = -1;
+    this.jumpTimer = 0.55;
+    this.shootCooldown = 0.9;
+    this.attackIndex = 0;
+    this.arenaMin = 82;
+    this.arenaMax = 1200;
+  }
+
+  update(dt, game) {
+    const player = game.player;
+    this.dir = player.x + player.w / 2 > this.x + this.w / 2 ? 1 : -1;
+    const speed = this.hp <= 3 ? 205 : 155;
+    this.vx = speed * this.dir;
+    this.jumpTimer -= dt;
+    if (this.onGround && this.jumpTimer <= 0) {
+      this.vy = -(this.hp <= 3 ? 650 : 560);
+      this.jumpTimer = (this.hp <= 3 ? 0.75 : 1.05) + Math.random() * 0.55;
+    }
+
+    super.update(dt, game);
+    if (this.x < this.arenaMin) {
+      this.x = this.arenaMin;
+      this.vx = Math.abs(this.vx);
+    }
+    if (this.x + this.w > this.arenaMax) {
+      this.x = this.arenaMax - this.w;
+      this.vx = -Math.abs(this.vx);
+    }
+
+    this.shootCooldown -= dt;
+    if (this.shootCooldown <= 0) {
+      this.firePattern(game);
+      this.shootCooldown = (this.hp <= 3 ? 0.72 : 1.05) + Math.random() * 0.35;
+    }
+  }
+
+  firePattern(game) {
+    const player = game.player;
+    const startX = this.x + this.w / 2;
+    const startY = this.y + 24;
+    const targetX = player.x + player.w / 2;
+    const targetY = player.y + player.h / 2;
+    const pattern = this.attackIndex % 3;
+    this.attackIndex += 1;
+    if (pattern === 0) {
+      game.projectiles.push(new TestBossProjectile(startX, startY, targetX, targetY, "bolt"));
+    } else if (pattern === 1) {
+      game.projectiles.push(new TestBossProjectile(startX - 10, startY, targetX - 80, targetY, "wide"));
+      game.projectiles.push(new TestBossProjectile(startX + 10, startY, targetX + 80, targetY, "wide"));
+    } else {
+      game.projectiles.push(new TestBossProjectile(startX, startY, targetX, targetY, "lob"));
+      game.projectiles.push(new TestBossProjectile(startX, startY + 10, targetX, targetY, "wave"));
+    }
+    game.addFloatingText("TEST ATTACK!", startX, this.y - 18, "#ffd166");
+  }
+
+  takeHit(game) {
+    super.takeHit(game);
+    this.vy = -260;
+    this.x += game.player.x < this.x ? 28 : -28;
+  }
+
+  render(ctx, camera) {
+    if (this.dead) return;
+    const x = Math.round(this.x - camera.x);
+    const y = Math.round(this.y - camera.y);
+    ctx.save();
+    ctx.fillStyle = this.hitFlash > 0 ? "#fff6a6" : "#ef476f";
+    ctx.beginPath();
+    ctx.roundRect(x, y, this.w, this.h, 8);
+    ctx.fill();
+    ctx.strokeStyle = "#211713";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.fillStyle = "#251900";
+    ctx.fillRect(x + 14, y + 20, 14, 12);
+    ctx.fillRect(x + this.w - 28, y + 20, 14, 12);
+    ctx.fillStyle = "#ffd166";
+    ctx.fillRect(x + 17, y + 52, this.w - 34, 8);
+    ctx.fillStyle = "#fff7dd";
+    ctx.font = "800 12px Segoe UI";
+    ctx.textAlign = "center";
+    ctx.fillText(this.name, x + this.w / 2, y - 8);
+    ctx.fillStyle = "#111";
+    ctx.fillRect(x, y + this.h + 5, this.w, 7);
+    ctx.fillStyle = "#ffd166";
+    ctx.fillRect(x, y + this.h + 5, this.w * (this.hp / this.maxHp), 7);
+    ctx.restore();
+  }
+}
+
 class ProceduralLevelGenerator {
   constructor(seed = Date.now()) {
     this.seed = seed >>> 0;
@@ -1334,6 +1485,7 @@ class ProceduralLevelGenerator {
 
   generate(levelNumber, speedrunMode, levelConfig = null) {
     const config = levelConfig || CAMPAIGN_LEVELS[Math.min(levelNumber - 1, CAMPAIGN_LEVELS.length - 1)];
+    if (config && config.bossFight) return this.generateBossArena(levelNumber, speedrunMode, config);
     const difficulty = config ? config.difficulty : Math.min(1, (levelNumber - 1) / 7);
     const length = config ? config.length : 5600 + (levelNumber - 1) * 850;
     const platforms = [];
@@ -1443,6 +1595,48 @@ class ProceduralLevelGenerator {
     };
   }
 
+  generateBossArena(levelNumber, speedrunMode, config) {
+    const width = 1280;
+    const ground = { x: 0, y: CONFIG.groundY, w: width, h: 92, kind: "ground" };
+    const platforms = [
+      ground,
+      { x: -42, y: 0, w: 42, h: CONFIG.groundY + 92, kind: "wall" },
+      { x: width, y: 0, w: 42, h: CONFIG.groundY + 92, kind: "wall" },
+      { x: 155, y: 330, w: 150, h: 18, kind: "floating" },
+      { x: 460, y: 292, w: 170, h: 18, kind: "floating" },
+      { x: 780, y: 320, w: 170, h: 18, kind: "floating" },
+      { x: 1030, y: 276, w: 145, h: 18, kind: "floating" }
+    ];
+    const details = [
+      { x: 55, y: 98, w: 300, h: 120, type: "tutorial", text: "TEST BOSS FIGHT" },
+      { x: 410, y: 126, w: 180, h: 180, type: "shop", theme: "bossfight", sign: "ARENA" },
+      { x: 720, y: 110, w: 230, h: 205, type: "block", theme: "bossfight", sign: "BOSS" },
+      { x: 1010, y: 138, w: 160, h: 145, type: "shop", theme: "bossfight", sign: "KCAL DROP" }
+    ];
+    const collectibles = [
+      new CollectibleItem(210, 286, COLLECTIBLE_TYPES.find((item) => item.name === "Delicje") || COLLECTIBLE_TYPES[0]),
+      new CollectibleItem(545, 246, COLLECTIBLE_TYPES.find((item) => item.name === "Energy Drink") || COLLECTIBLE_TYPES[0])
+    ];
+    const enemies = [new TestArenaBossEnemy(880, CONFIG.groundY - 78)];
+    return {
+      width,
+      platforms,
+      details,
+      collectibles,
+      enemies,
+      checkpoints: [],
+      finish: { x: width + 500, y: CONFIG.groundY - 148, w: 48, h: 148 },
+      label: config.label,
+      world: config.world,
+      difficulty: config.difficulty,
+      boss: true,
+      bossFight: true,
+      fixedCamera: true,
+      collectibleSpawnTimer: 2.4,
+      spawn: { x: 92, y: CONFIG.groundY - CONFIG.player.drawHeight }
+    };
+  }
+
   decoratePlatform(platform, collectibles, enemies, levelNumber, difficulty, speedrunMode) {
     const safeStart = platform.x < 680;
     this.addScatteredCollectibles(platform, collectibles, speedrunMode, difficulty);
@@ -1504,7 +1698,7 @@ class ProceduralLevelGenerator {
 
   addTownDetails(details, x, w, groundY, finale = false, theme = "center") {
     const signSets = {
-      suburbs: ["PIEKARNIA", "CUKIERNIA", "SKLEP U ANI", "WARZYWNIAK", "DOMOFONY"],
+      suburbs: ["PIEKARNIA", "CUKIERNIA", "SKLEP U ANI", "WARZYWNIAK", "ARABSKI MASAŻ STOPY"],
       center: ["ŻABKA", "MONOPOLOWY", "PIEKARNIA", "CUKIERNIA", "LEWIATAN", "ROSSMANN"],
       blocks: ["BIEDRONKA", "LEWIATAN", "APTEKA", "ŻABKA", "LOMBARD", "PIZZA"],
       market: ["ŻABKA", "MONOPOLOWY", "ROSSMANN", "BIEDRONKA", "CUKIERNIA", "McD POWIĘKSZONY"]
@@ -1549,6 +1743,7 @@ class UIManager {
     this.resultDetails = document.getElementById("resultDetails");
     this.bestTimeLabel = document.getElementById("bestTimeLabel");
     this.unlimitedLivesToggle = document.getElementById("unlimitedLivesToggle");
+    this.skipLevelToggle = document.getElementById("skipLevelToggle");
     this.musicVolumeSlider = document.getElementById("musicVolumeSlider");
     this.sfxVolumeSlider = document.getElementById("sfxVolumeSlider");
     this.musicVolumeValue = document.getElementById("musicVolumeValue");
@@ -1568,6 +1763,10 @@ class UIManager {
     });
     this.unlimitedLivesToggle.addEventListener("click", () => {
       game.unlimitedLives = !game.unlimitedLives;
+      this.updateMenu();
+    });
+    this.skipLevelToggle.addEventListener("click", () => {
+      game.skipLevelCheat = !game.skipLevelCheat;
       this.updateMenu();
     });
     document.getElementById("resetBestButton").addEventListener("click", () => {
@@ -1597,6 +1796,7 @@ class UIManager {
     const best = SaveSystem.getBestTime(false);
     this.bestTimeLabel.textContent = best ? `Najlepszy czas: ${formatTime(best)}` : "Najlepszy czas: brak";
     this.unlimitedLivesToggle.textContent = `Unlimited lives: ${this.game.unlimitedLives ? "YES" : "NO"}`;
+    this.skipLevelToggle.textContent = `Skip Level (O): ${this.game.skipLevelCheat ? "YES" : "NO"}`;
   }
 
   syncSettingsControls() {
@@ -1836,6 +2036,7 @@ class GameManager {
     this.state = "menu";
     this.startGuideSeen = false;
     this.unlimitedLives = false;
+    this.skipLevelCheat = false;
     this.collectedCount = 0;
     this.consumedKcal = 0;
     this.nextExtraLifeKcal = 15000;
@@ -1866,6 +2067,9 @@ class GameManager {
     });
     this.input.bind("KeyR", () => {
       if (["playing", "paused", "complete", "gameover"].includes(this.state)) this.restartLevel();
+    });
+    this.input.bind("KeyO", () => {
+      if (this.skipLevelCheat && this.state === "playing") this.skipLevel();
     });
   }
 
@@ -1907,8 +2111,8 @@ class GameManager {
     this.dimAlpha = 0;
     this.dimTarget = 0;
     this.sceneFreezeTime = null;
-    this.player.spawnX = 82;
-    this.player.spawnY = CONFIG.groundY - this.player.h;
+    this.player.spawnX = this.level.spawn ? this.level.spawn.x : 82;
+    this.player.spawnY = this.level.spawn ? this.level.spawn.y : CONFIG.groundY - this.player.h;
     this.player.checkpoint = { x: this.player.spawnX, y: this.player.spawnY };
   }
 
@@ -1928,6 +2132,15 @@ class GameManager {
     this.state = "playing";
     this.ui.hideAll();
     this.audio.playMusic();
+  }
+
+  skipLevel() {
+    this.addFloatingText("Skip level!", this.player.x + this.player.w / 2, this.player.y - 42, "#ffd166");
+    if (this.levelIndex >= CAMPAIGN_LEVELS.length - 1) {
+      this.completeLevel();
+      return;
+    }
+    this.nextLevel();
   }
 
   restartLevel() {
@@ -2044,7 +2257,8 @@ class GameManager {
   update(dt) {
     this.timer.update(dt);
     this.player.update(dt);
-    this.camera.update(dt, this.player, this.level.width);
+    if (this.level.fixedCamera) this.camera.x = 0;
+    else this.camera.update(dt, this.player, this.level.width);
 
     for (const item of this.level.collectibles) item.update(dt, this);
     this.level.collectibles = this.level.collectibles.filter((item) => !item.collected);
@@ -2058,6 +2272,7 @@ class GameManager {
     for (const projectile of this.projectiles) projectile.update(dt, this);
     this.projectiles = this.projectiles.filter((projectile) => !projectile.dead);
     if (this.finishWarningCooldown > 0) this.finishWarningCooldown -= dt;
+    if (this.level.bossFight) this.updateBossArena(dt);
 
     for (const checkpoint of this.level.checkpoints) {
       if (!checkpoint.active && Math.abs(this.player.x - checkpoint.x) < 44 && this.player.y < checkpoint.y + 110) {
@@ -2068,7 +2283,7 @@ class GameManager {
     }
 
     if (rectsOverlap(this.player.bounds, this.level.finish)) {
-      const bossAlive = this.level.boss && this.level.enemies.some((enemy) => enemy instanceof BossFlyingTrackerEnemy);
+      const bossAlive = this.level.boss && this.level.enemies.some((enemy) => enemy instanceof BossFlyingTrackerEnemy || enemy instanceof TestArenaBossEnemy);
       if (bossAlive) {
         if (this.finishWarningCooldown <= 0) {
           this.addFloatingText("Najpierw boss!", this.player.x, this.player.y - 30, "#ffd166");
@@ -2084,6 +2299,34 @@ class GameManager {
       text.life -= dt;
     }
     this.floatingTexts = this.floatingTexts.filter((text) => text.life > 0);
+  }
+
+  updateBossArena(dt) {
+    const bossAlive = this.level.enemies.some((enemy) => enemy instanceof TestArenaBossEnemy);
+    if (!bossAlive) {
+      this.completeLevel();
+      return;
+    }
+    this.level.collectibleSpawnTimer = (this.level.collectibleSpawnTimer || 0) - dt;
+    if (this.level.collectibleSpawnTimer > 0 || this.level.collectibles.length >= 4) return;
+
+    const reachableSpots = [
+      { x: 155, y: 330 },
+      { x: 460, y: 292 },
+      { x: 780, y: 320 },
+      { x: 1030, y: 276 },
+      { x: 180, y: CONFIG.groundY },
+      { x: 610, y: CONFIG.groundY },
+      { x: 1040, y: CONFIG.groundY }
+    ];
+    const spot = reachableSpots[Math.floor(Math.random() * reachableSpots.length)];
+    const fancyPool = ["Lays Chips", "Delicje", "Energy Drink", "Kinder Bueno", "Schoko Bons"];
+    if (Math.random() < 0.16) fancyPool.push("Kubełek KFC");
+    const name = fancyPool[Math.floor(Math.random() * fancyPool.length)];
+    const type = COLLECTIBLE_TYPES.find((item) => item.name === name) || COLLECTIBLE_TYPES[0];
+    this.level.collectibles.push(new CollectibleItem(spot.x + Math.random() * 70, spot.y - 72 - Math.random() * 32, type));
+    this.addFloatingText("KCAL DROP!", spot.x + 35, spot.y - 95, "#ffd166");
+    this.level.collectibleSpawnTimer = 3.2 + Math.random() * 2.4;
   }
 
   render() {
@@ -2121,6 +2364,23 @@ class GameManager {
     sky.addColorStop(1, palette.skyBottom);
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, w, h);
+
+    if (theme === "bossfight") {
+      ctx.fillStyle = "rgba(255, 209, 102, 0.16)";
+      for (let x = 0; x < w; x += 92) {
+        ctx.fillRect(x, 96, 44, 310);
+      }
+      ctx.fillStyle = "rgba(239, 71, 111, 0.26)";
+      ctx.fillRect(0, 118, w, 8);
+      ctx.fillRect(0, 372, w, 10);
+      ctx.fillStyle = "#ffd166";
+      ctx.font = "900 34px Segoe UI";
+      ctx.textAlign = "center";
+      ctx.fillText("TEST BOSS FIGHT", w / 2, 178);
+      ctx.font = "800 14px Segoe UI";
+      ctx.fillText("STOMP THE BOSS - SURVIVE THE TEST ATTACKS", w / 2, 204);
+      return;
+    }
 
     ctx.fillStyle = palette.far;
     const farStep = theme === "suburbs" ? 230 : 260;
@@ -2239,6 +2499,7 @@ class GameManager {
   }
 
   renderPlatform(ctx, p) {
+    if (p.kind === "wall") return;
     const x = Math.round(p.x - this.camera.x);
     const y = Math.round(p.y - this.camera.y);
     const theme = this.currentLevel ? this.currentLevel.theme : "center";
@@ -2282,6 +2543,7 @@ class GameManager {
   }
 
   renderFinish(ctx) {
+    if (this.level.bossFight) return;
     const f = this.level.finish;
     const x = Math.round(f.x - this.camera.x);
     const y = Math.round(f.y - this.camera.y);
