@@ -48,20 +48,19 @@ const THEME_PALETTES = {
 const PLAYER_SPRITES = {
   idle: ["assets/player/processed/k01-static.png"],
   walk: [
+    "assets/player/processed/k01-static.png",
     "assets/player/processed/k01-walk-step1.png",
-    "assets/player/processed/k01-static.png",
     "assets/player/processed/k01-walk-step2.png",
-    "assets/player/processed/k01-static.png",
-    "assets/player/processed/k01-walk-step3.png"
+    "assets/player/processed/k01-walk-step3.png",
+    "assets/player/processed/k01-walk-step2.png"
   ],
   jump: ["assets/player/processed/k01-jump-step1.png"],
   fall: ["assets/player/processed/k01-jump-step2-and-fall.png"],
   sprint: [
     "assets/player/processed/k01-walk-step1.png",
-    "assets/player/processed/k01-static.png",
     "assets/player/processed/k01-walk-step2.png",
-    "assets/player/processed/k01-static.png",
-    "assets/player/processed/k01-walk-step3.png"
+    "assets/player/processed/k01-walk-step3.png",
+    "assets/player/processed/k01-walk-step2.png"
   ]
 };
 
