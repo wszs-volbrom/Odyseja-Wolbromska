@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Odyseja Wolbromska</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="game-shell">
+    <canvas id="gameCanvas" width="960" height="540" aria-label="Odyseja Wolbromska"></canvas>
+
+    <section id="disclaimerOverlay" class="overlay">
+      <div class="panel wide">
+        <p class="kicker">Uwaga uwaga</p>
+        <h2>Disclaimer</h2>
+        <p class="disclaimer-text">
+          Grasz w wczesną, rozwojową wersję Odysei Wolbromskiej. Oznacza to, że część mechanik, poziomów, przeciwników, animacji i balansu może jeszcze działać dziwnie, wyglądać roboczo albo zachowywać się tak, jakby sama gra też potrzebowała paska głodu. Błędy, glitche, niedoróbki i absurdalne sytuacje są na tym etapie spodziewane. Finalna wersja gry może znacząco różnić się od obecnej - zarówno wizualnie, jak i gameplayowo. Wszelkie sugestie można zgłaszać albo w DM na Instagramie: @wszs.volbrom lub mailowo: wszs.volbrom@proton.me
+        </p>
+        <button id="acceptDisclaimerButton">ROZUMIEM - ZAŁADUJ GRĘ</button>
+      </div>
+    </section>
+
+    <section id="menuOverlay" class="overlay hidden">
+      <div class="panel">
+        <p class="kicker">V 0.4.3 PREVIEW</p>
+        <h1>Odyseja Wolbromska</h1>
+        <p class="subtitle">Zbieraj pyszności. Zabierz Wolbrzymkę do Dupaju.</p>
+        <div class="menu-actions">
+          <button id="startButton">Start!</button>
+          <button id="resetBestButton">Zresetuj HiScore</button>
+          <button id="controlsButton">Sterowanie</button>
+        </div>
+        <div class="debug-cheats">
+          <p class="small">Cheats (debug only)</p>
+          <button id="unlimitedLivesToggle">Unlimited lives: NO</button>
+        </div>
+        <p class="small">Sprint: dwa razy D / → albo dwa razy A / ←.</p>
+        <p id="bestTimeLabel" class="small"></p>
+      </div>
+    </section>
+
+    <section id="pauseOverlay" class="overlay hidden">
+      <div class="panel compact">
+        <h2>Pauza</h2>
+        <p>Esc wraca do gry. R restartuje poziom.</p>
+      </div>
+    </section>
+
+    <section id="controlsOverlay" class="overlay hidden">
+      <div class="panel compact">
+        <h2>Sterowanie</h2>
+        <ul class="controls-list">
+          <li>A / ←: ruch w lewo</li>
+          <li>D / →: ruch w prawo</li>
+          <li>Spacja: skok</li>
+          <li>Spacja w powietrzu: double jump za 500 kcal</li>
+          <li>Dwa razy D / → albo A / ←: sprint</li>
+          <li>Shift: alternatywny sprint</li>
+          <li>Esc: pauza</li>
+          <li>R: restart poziomu</li>
+        </ul>
+        <button id="backButton">Wróć</button>
+      </div>
+    </section>
+
+    <section id="resultOverlay" class="overlay hidden">
+      <div class="panel compact">
+        <h2 id="resultTitle">Poziom ukończony</h2>
+        <p id="resultDetails"></p>
+        <div class="menu-actions">
+          <button id="nextLevelButton">Następny poziom</button>
+          <button id="retryButton">Restart</button>
+          <button id="menuButton">Menu</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="game.js?v=21"></script>
+</body>
+</html>
