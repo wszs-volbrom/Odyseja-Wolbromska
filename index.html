@@ -25,13 +25,13 @@
 
     <section id="menuOverlay" class="overlay hidden">
       <div class="panel">
-        <p class="kicker">V 0.4.725052026-2 PREVIEW</p>
+        <p class="kicker">V 0.4.825052026-1 PREVIEW</p>
         <h2>Odyseja Wolbromska</h2>
         <p class="subtitle">Zbieraj pyszności. Zabierz Wolbrzymkę do Dupaju.</p>
         <div class="menu-actions">
           <button id="startButton">Start!</button>
           <button id="resetBestButton">Zresetuj HiScore</button>
-          <button id="controlsButton">Sterowanie</button>
+          <button id="controlsButton">Sklep (EXPERIMENTAL)</button>
           <button id="settingsButton">Ustawienia</button>
         </div>
         <div class="debug-cheats">
@@ -85,9 +85,31 @@
     </section>
 
     <section id="controlsOverlay" class="overlay hidden">
-      <div class="panel compact">
-        <h2>Sterowanie</h2>
-        <ul class="controls-list">
+      <div class="panel wide">
+        <p class="kicker">EXPERIMENTAL</p>
+        <h2>Sklep</h2>
+        <p id="skinWalletLabel" class="shop-balance">Saldo: 0 kcal</p>
+        <div id="skinShopGrid" class="skin-shop-grid">
+          <article class="skin-card" data-skin-id="kloda-purple">
+            <div class="skin-preview">
+              <img src="assets/player/skins/kloda-purple/static.png" alt="Kloda Classic">
+            </div>
+            <h3>Kloda Classic</h3>
+            <p>Fioletowa sukienka</p>
+            <strong class="skin-price">Cena: 0 kcal</strong>
+            <button class="skin-action" type="button" data-skin-id="kloda-purple">Wybierz</button>
+          </article>
+          <article class="skin-card" data-skin-id="tss-blue">
+            <div class="skin-preview">
+              <img src="assets/player/skins/tss-blue/static.png" alt="TSS Blue">
+            </div>
+            <h3>TSS Blue</h3>
+            <p>Niebieski drip</p>
+            <strong class="skin-price">Cena: 12000 kcal</strong>
+            <button class="skin-action" type="button" data-skin-id="tss-blue">Kup</button>
+          </article>
+        </div>
+        <ul class="controls-list hidden-shop-legacy">
           <li>A / ←: ruch w lewo</li>
           <li>D / →: ruch w prawo</li>
           <li>Spacja: skok</li>
@@ -142,6 +164,13 @@
       </div>
     </section>
 
+    <div id="screenControls" class="screen-controls hidden" aria-label="Przyciski ekranu">
+      <button id="fullscreenButton" class="screen-button screen-button-fullscreen" type="button" aria-label="Pełny ekran" title="Pełny ekran">⛶</button>
+      <button id="screenPauseButton" class="screen-button screen-button-pause" type="button" aria-label="Pauza" title="Pauza">
+        <img src="assets/mobile-buttons/pause.png" alt="">
+      </button>
+    </div>
+
     <div id="mobileControls" class="mobile-controls hidden" aria-label="Przyciski ekranowe">
       <div class="mobile-controls-left">
         <button class="touch-button touch-button-square" type="button" data-touch-action="left" aria-label="Lewo">
@@ -159,12 +188,9 @@
           <img src="assets/mobile-buttons/sprint.png" alt="">
         </button>
       </div>
-      <button class="touch-button touch-button-pause" type="button" data-touch-action="pause" aria-label="Pauza">
-        <img src="assets/mobile-buttons/pause.png" alt="">
-      </button>
     </div>
   </main>
 
-  <script src="game.js?v=47"></script>
+  <script src="game.js?v=50"></script>
 </body>
 </html>

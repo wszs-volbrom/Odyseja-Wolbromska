@@ -75,24 +75,59 @@ const THEME_PALETTES = {
   bossfight: { skyTop: "#3f304d", skyMid: "#28203a", skyBottom: "#171421", far: "rgba(255, 209, 102, 0.16)", near: "rgba(239, 71, 111, 0.28)" }
 };
 
-const PLAYER_SPRITES = {
-  idle: ["assets/player/processed/k01-static.png"],
-  walk: [
-    "assets/player/processed/k01-static.png",
-    "assets/player/processed/k01-walk-step1.png",
-    "assets/player/processed/k01-walk-step2.png",
-    "assets/player/processed/k01-walk-step3.png",
-    "assets/player/processed/k01-walk-step2.png",
-    "assets/player/processed/k01-walk-step1.png"
-  ],
-  jump: ["assets/player/processed/k01-jump-step1.png"],
-  fall: ["assets/player/processed/k01-jump-step2-and-fall.png"],
-  sprint: [
-    "assets/player/processed/k01-walk-step1.png",
-    "assets/player/processed/k01-walk-step2.png",
-    "assets/player/processed/k01-walk-step3.png",
-    "assets/player/processed/k01-walk-step2.png"
-  ]
+const DEFAULT_SKIN_ID = "kloda-purple";
+const INITIAL_SKIN_WALLET = 50000;
+
+const PLAYER_SKINS = {
+  "kloda-purple": {
+    id: "kloda-purple",
+    name: "Kłoda Classic",
+    label: "Fioletowa sukienka",
+    price: 0,
+    preview: "assets/player/skins/kloda-purple/static.png",
+    sprites: {
+      idle: ["assets/player/skins/kloda-purple/static.png"],
+      walk: [
+        "assets/player/skins/kloda-purple/static.png",
+        "assets/player/skins/kloda-purple/walk1.png",
+        "assets/player/skins/kloda-purple/static.png",
+        "assets/player/skins/kloda-purple/walk2.png",
+        "assets/player/skins/kloda-purple/walk1.png"
+      ],
+      jump: ["assets/player/skins/kloda-purple/jump1.png"],
+      fall: ["assets/player/skins/kloda-purple/fall.png"],
+      sprint: [
+        "assets/player/skins/kloda-purple/walk1.png",
+        "assets/player/skins/kloda-purple/walk2.png",
+        "assets/player/skins/kloda-purple/walk3.png",
+        "assets/player/skins/kloda-purple/walk2.png"
+      ]
+    }
+  },
+  "tss-blue": {
+    id: "tss-blue",
+    name: "TSS Blue",
+    label: "Niebieski drip",
+    price: 12000,
+    preview: "assets/player/skins/tss-blue/static.png",
+    sprites: {
+      idle: ["assets/player/skins/tss-blue/static.png"],
+      walk: [
+        "assets/player/skins/tss-blue/static.png",
+        "assets/player/skins/tss-blue/walk.png",
+        "assets/player/skins/tss-blue/walk1.png",
+        "assets/player/skins/tss-blue/static.png",
+        "assets/player/skins/tss-blue/walk.png"
+      ],
+      jump: ["assets/player/skins/tss-blue/jump1.png"],
+      fall: ["assets/player/skins/tss-blue/fall.png"],
+      sprint: [
+        "assets/player/skins/tss-blue/walk.png",
+        "assets/player/skins/tss-blue/walk1.png",
+        "assets/player/skins/tss-blue/walk.png"
+      ]
+    }
+  }
 };
 
 const PLAYER_ANIMATION_FPS = {
@@ -376,6 +411,24 @@ class SaveSystem {
     return speedrun ? "odysejaWolbromska.bestTime.speedrun" : "odysejaWolbromska.bestTime.casual";
   }
 
+  static storageGet(key, fallback = null) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw === null ? fallback : raw;
+    } catch {
+      return fallback;
+    }
+  }
+
+  static storageSet(key, value) {
+    try {
+      localStorage.setItem(key, String(value));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   static getBestTime(speedrun) {
     try {
       const raw = localStorage.getItem(SaveSystem.key(speedrun));
@@ -405,6 +458,41 @@ class SaveSystem {
     } catch {
       // Local files can block storage in some browsers; the game should still run.
     }
+  }
+
+  static getSkinWallet() {
+    const raw = SaveSystem.storageGet("odysejaWolbromska.skinWallet", null);
+    if (raw === null) {
+      SaveSystem.storageSet("odysejaWolbromska.skinWallet", INITIAL_SKIN_WALLET);
+      return INITIAL_SKIN_WALLET;
+    }
+    return Number.isFinite(Number(raw)) ? Number(raw) : INITIAL_SKIN_WALLET;
+  }
+
+  static setSkinWallet(value) {
+    SaveSystem.storageSet("odysejaWolbromska.skinWallet", Math.max(0, Math.floor(value)));
+  }
+
+  static getSelectedSkin() {
+    const id = SaveSystem.storageGet("odysejaWolbromska.selectedSkin", DEFAULT_SKIN_ID);
+    return PLAYER_SKINS[id] ? id : DEFAULT_SKIN_ID;
+  }
+
+  static setSelectedSkin(id) {
+    if (PLAYER_SKINS[id]) SaveSystem.storageSet("odysejaWolbromska.selectedSkin", id);
+  }
+
+  static getOwnedSkins() {
+    const raw = SaveSystem.storageGet("odysejaWolbromska.ownedSkins", DEFAULT_SKIN_ID);
+    const owned = new Set(String(raw).split(",").filter((id) => PLAYER_SKINS[id]));
+    owned.add(DEFAULT_SKIN_ID);
+    return owned;
+  }
+
+  static setOwnedSkins(owned) {
+    const ids = [...owned].filter((id) => PLAYER_SKINS[id]);
+    if (!ids.includes(DEFAULT_SKIN_ID)) ids.unshift(DEFAULT_SKIN_ID);
+    SaveSystem.storageSet("odysejaWolbromska.ownedSkins", ids.join(","));
   }
 }
 
@@ -560,12 +648,19 @@ class CollisionSystem {
 class SpriteLoader {
   constructor() {
     this.frames = new Map();
+    this.skinId = null;
     this.ready = false;
     this.failed = [];
   }
 
-  async load() {
-    const entries = Object.entries(PLAYER_SPRITES);
+  async load(skinId = DEFAULT_SKIN_ID) {
+    const skin = PLAYER_SKINS[skinId] || PLAYER_SKINS[DEFAULT_SKIN_ID];
+    if (this.ready && this.skinId === skin.id) return;
+    this.frames = new Map();
+    this.failed = [];
+    this.ready = false;
+    this.skinId = skin.id;
+    const entries = Object.entries(skin.sprites);
     await Promise.all(entries.map(async ([state, paths]) => {
       const frames = await Promise.all(paths.map((path) => this.loadImage(path)));
       this.frames.set(state, frames.filter(Boolean));
@@ -761,16 +856,23 @@ function loadUiImages() {
 class PlayerController {
   constructor(game) {
     this.game = game;
-    this.w = 52;
-    this.h = CONFIG.player.drawHeight;
+    this.baseW = 52;
+    this.baseH = CONFIG.player.drawHeight;
+    this.w = this.baseW;
+    this.h = this.baseH;
     this.spawnX = 80;
     this.spawnY = CONFIG.groundY - this.h;
+    this.spawnHeight = this.h;
+    this.ozempicActive = false;
+    this.ozempicSnacksRemaining = 0;
     this.reset();
   }
 
   reset() {
+    this.applyOzempicSize(false);
+    const spawnFoot = this.spawnY + (this.spawnHeight || this.h);
     this.x = this.spawnX;
-    this.y = this.spawnY;
+    this.y = spawnFoot - this.h;
     this.vx = 0;
     this.vy = 0;
     this.facing = 1;
@@ -780,20 +882,79 @@ class PlayerController {
     this.invulnerable = 0;
     this.speedBoost = 0;
     this.lastGroundY = CONFIG.groundY;
-    this.checkpoint = { x: this.spawnX, y: this.spawnY };
+    this.checkpoint = { x: this.spawnX, y: this.spawnY, standingHeight: this.spawnHeight || this.h };
   }
 
   get bounds() {
     return { x: this.x, y: this.y, w: this.w, h: this.h };
   }
 
+  setPlayerScale(scale, keepFeet = true) {
+    const footY = this.y + this.h;
+    this.w = Math.round(this.baseW * scale);
+    this.h = Math.round(this.baseH * scale);
+    if (keepFeet) this.y = footY - this.h;
+  }
+
+  applyOzempicSize(keepFeet = true) {
+    this.setPlayerScale(this.ozempicActive ? 0.5 : 1, keepFeet);
+  }
+
+  clearOzempicStatus(keepFeet = true) {
+    this.ozempicActive = false;
+    this.ozempicSnacksRemaining = 0;
+    this.applyOzempicSize(keepFeet);
+  }
+
   respawnAtCheckpoint() {
+    this.applyOzempicSize(false);
+    const checkpointFoot = this.checkpoint.y + (this.checkpoint.standingHeight || this.h);
     this.x = this.checkpoint.x;
-    this.y = this.checkpoint.y;
+    this.y = checkpointFoot - this.h;
     this.vx = 0;
     this.vy = 0;
     this.invulnerable = CONFIG.player.invulnerability;
     this.game.hunger.reset();
+  }
+
+  receiveOzempic(sourceX) {
+    if (this.invulnerable > 0) return false;
+
+    if (this.ozempicActive) {
+      this.game.addFloatingText("OZEMPIC x2!", this.x + this.w / 2, this.y - 46, "#ef476f");
+      if (!this.game.unlimitedLives) this.lives -= 1;
+      this.invulnerable = CONFIG.player.invulnerability;
+      this.vx = this.x < sourceX ? -260 : 260;
+      this.vy = -260;
+      this.game.addFloatingText("-1 zycie", this.x + this.w / 2, this.y - 28, "#ef476f");
+      if (this.lives <= 0) {
+        this.game.audio.playEnemyDefeated();
+        this.game.gameOver();
+      }
+      return true;
+    }
+
+    this.ozempicActive = true;
+    this.ozempicSnacksRemaining = 6;
+    this.applyOzempicSize(true);
+    this.invulnerable = CONFIG.player.invulnerability;
+    this.vx = this.x < sourceX ? -250 : 250;
+    this.vy = -235;
+    this.game.hunger.add(-500);
+    this.game.addFloatingText("OZEMPIC! -500 kcal", this.x + this.w / 2, this.y - 44, "#9cffb7");
+    this.game.addFloatingText("Zjedz 6 pysznosci", this.x + this.w / 2, this.y - 66, "#ffd166");
+    return true;
+  }
+
+  registerOzempicSnack() {
+    if (!this.ozempicActive) return;
+    this.ozempicSnacksRemaining = Math.max(0, this.ozempicSnacksRemaining - 1);
+    if (this.ozempicSnacksRemaining === 0) {
+      this.clearOzempicStatus(true);
+      this.game.addFloatingText("Rozmiar wraca!", this.x + this.w / 2, this.y - 46, "#9cffb7");
+    } else {
+      this.game.addFloatingText(`OZEMPIC: ${this.ozempicSnacksRemaining}/6`, this.x + this.w / 2, this.y - 46, "#ffd166");
+    }
   }
 
   update(dt) {
@@ -937,8 +1098,10 @@ class CollectibleItem {
       game.hunger.add(this.type.hunger);
       game.collectedCount += 1;
       game.consumedKcal += this.type.hunger;
+      game.addSkinWalletKcal(this.type.hunger);
       game.checkExtraLifeReward();
       if (this.type.speedBoost) game.player.speedBoost = this.type.speedBoost;
+      game.player.registerOzempicSnack();
       const label = this.type.speedBoost ? `+${this.type.hunger} kcal +boost` : `+${this.type.hunger} kcal`;
       game.addFloatingText(label, this.x, this.y - 12, this.type.color);
       game.audio.playCollectible();
@@ -1139,7 +1302,7 @@ class FastWalkerEnemy extends EnemyBase {
     if (inRange) this.dir = dx > 0 ? 1 : -1;
     if (this.shootCooldown <= 0 && inRange) {
       game.projectiles.push(new EnemyProjectile(this.x + this.w / 2, this.y + 18, this.dir, "fit"));
-      game.addFloatingText("Detoks!", this.x + this.w / 2, this.y - 16, "#9cffb7");
+      game.addFloatingText("OZEMPIC!", this.x + this.w / 2, this.y - 16, "#9cffb7");
       this.shootCooldown = 1.45 + Math.random() * 0.75;
     }
   }
@@ -1443,7 +1606,7 @@ class EnemyProjectile {
     this.x = x;
     this.y = y;
     this.type = type;
-    this.w = type === "andziaks" ? 22 : 26;
+    this.w = type === "andziaks" ? 22 : 38;
     this.h = type === "andziaks" ? 22 : 18;
     this.vx = (type === "andziaks" ? 215 : 255) * direction;
     this.vy = type === "andziaks" ? -95 : -18;
@@ -1467,9 +1630,7 @@ class EnemyProjectile {
         game.player.damage(this.x, 1);
         game.addFloatingText("Andziaks trafia!", game.player.x, game.player.y - 42, "#ffd166");
       } else {
-        game.player.damage(this.x, 1);
-        game.hunger.add(-140);
-        game.addFloatingText("-140 kcal", game.player.x, game.player.y - 38, "#9cffb7");
+        game.player.receiveOzempic(this.x);
       }
     }
   }
@@ -1487,7 +1648,7 @@ class EnemyProjectile {
     ctx.fillStyle = this.type === "andziaks" ? "#7a3f18" : "#185c31";
     ctx.font = canvasFont(800, 8);
     ctx.textAlign = "center";
-    ctx.fillText(this.type === "andziaks" ? "BT" : "FIT", x + this.w / 2, y + (this.type === "andziaks" ? 14 : 12));
+    ctx.fillText(this.type === "andziaks" ? "BT" : "OZ", x + this.w / 2, y + (this.type === "andziaks" ? 14 : 12));
     ctx.restore();
   }
 }
@@ -1685,13 +1846,7 @@ class ProceduralLevelGenerator {
 
     x = 560;
 
-    /*
-      Generator buduje poziom jako łańcuch bezpiecznych segmentów.
-      Każdy kolejny fragment startuje blisko poprzedniego: luka jest mniejsza
-      niż realny zasięg skoku, a wzrost wysokości jest ograniczony do wartości,
-      na którą postać może wskoczyć. Dzięki temu meta pozostaje osiągalna,
-      nawet gdy segmenty są losowe.
-    */
+
     while (x < length - 720) {
       const canSpawnPit = x > 780;
       const gapChance = 0.46 + difficulty * 0.24;
@@ -1731,7 +1886,7 @@ class ProceduralLevelGenerator {
               w: 240,
               h: 44,
               type: "tutorial",
-              text: "Użyj sprintu! >>>"
+              text: "Użyj sprintu / doublejump! >>>"
             });
           }
         }
@@ -2139,6 +2294,11 @@ class UIManager {
     this.loadingTitle = document.getElementById("loadingTitle");
     this.loadingDetails = document.getElementById("loadingDetails");
     this.loadingBarFill = document.getElementById("loadingBarFill");
+    this.skinWalletLabel = document.getElementById("skinWalletLabel");
+    this.skinShopGrid = document.getElementById("skinShopGrid");
+    this.screenControls = document.getElementById("screenControls");
+    this.fullscreenButton = document.getElementById("fullscreenButton");
+    this.screenPauseButton = document.getElementById("screenPauseButton");
 
     document.getElementById("acceptDisclaimerButton").addEventListener("click", () => this.showMenu());
     document.getElementById("startButton").addEventListener("click", () => {
@@ -2164,7 +2324,7 @@ class UIManager {
       SaveSystem.resetBestTime();
       this.updateMenu();
     });
-    document.getElementById("controlsButton").addEventListener("click", () => this.showControls());
+    document.getElementById("controlsButton").addEventListener("click", () => this.showShop());
     document.getElementById("settingsButton").addEventListener("click", () => this.showSettings());
     document.getElementById("backButton").addEventListener("click", () => this.showMenu());
     document.getElementById("settingsBackButton").addEventListener("click", () => this.showMenu());
@@ -2174,6 +2334,11 @@ class UIManager {
     document.getElementById("resumeButton").addEventListener("click", () => game.resume());
     document.getElementById("pauseRestartButton").addEventListener("click", () => game.restartLevel());
     document.getElementById("pauseMenuButton").addEventListener("click", () => game.returnToMenu());
+    this.fullscreenButton?.addEventListener("click", () => game.toggleFullscreen());
+    this.screenPauseButton?.addEventListener("click", () => {
+      if (game.state === "playing") game.pause();
+      else if (game.state === "paused") game.resume();
+    });
     this.musicVolumeSlider.addEventListener("input", () => {
       game.audio.setMusicVolume(Number(this.musicVolumeSlider.value) / 100);
       this.updateSettingsLabels();
@@ -2186,8 +2351,17 @@ class UIManager {
       game.setTouchControlsMode(this.touchControlsModeSelect.value);
       this.updateSettingsLabels();
     });
+    this.skinShopGrid?.querySelectorAll(".skin-action").forEach((button) => {
+      button.addEventListener("click", async () => {
+        await game.handleSkinShopAction(button.dataset.skinId);
+        this.updateShop();
+        this.updateMenu();
+      });
+    });
     this.updateMenu();
+    this.updateShop();
     this.syncSettingsControls();
+    this.updateScreenControls();
   }
 
   updateMenu() {
@@ -2195,6 +2369,31 @@ class UIManager {
     this.bestTimeLabel.textContent = best ? `Najlepszy czas: ${formatTime(best)}` : "Najlepszy czas: brak";
     this.unlimitedLivesToggle.textContent = `Unlimited lives: ${this.game.unlimitedLives ? "YES" : "NO"}`;
     this.skipLevelToggle.textContent = `Skip Level (O): ${this.game.skipLevelCheat ? "YES" : "NO"}`;
+  }
+
+  updateShop() {
+    if (!this.skinWalletLabel || !this.skinShopGrid) return;
+    this.skinWalletLabel.textContent = `Saldo: ${Math.floor(this.game.skinWallet)} kcal`;
+    this.skinShopGrid.querySelectorAll(".skin-card").forEach((card) => {
+      const id = card.dataset.skinId;
+      const skin = PLAYER_SKINS[id];
+      const owned = this.game.ownedSkins.has(id);
+      const selected = this.game.selectedSkinId === id;
+      const button = card.querySelector(".skin-action");
+      card.classList.toggle("selected", selected);
+      card.classList.toggle("locked", !owned);
+      if (!button || !skin) return;
+      if (selected) {
+        button.textContent = "Wybrano";
+        button.disabled = true;
+      } else if (owned) {
+        button.textContent = "Wybierz";
+        button.disabled = false;
+      } else {
+        button.textContent = this.game.skinWallet >= skin.price ? `Kup za ${skin.price} kcal` : `Brakuje ${skin.price - this.game.skinWallet} kcal`;
+        button.disabled = this.game.skinWallet < skin.price;
+      }
+    });
   }
 
   syncSettingsControls() {
@@ -2207,6 +2406,12 @@ class UIManager {
   updateSettingsLabels() {
     this.musicVolumeValue.textContent = `${Math.round(this.game.audio.musicVolume * 100)}%`;
     this.sfxVolumeValue.textContent = `${Math.round(this.game.audio.sfxVolume * 100)}%`;
+  }
+
+  updateScreenControls() {
+    if (!this.screenControls) return;
+    const visible = this.game.state === "playing" || this.game.state === "paused";
+    this.screenControls.classList.toggle("hidden", !visible);
   }
 
   showMenu() {
@@ -2244,10 +2449,11 @@ class UIManager {
     this.resultOverlay.classList.add("hidden");
   }
 
-  showControls() {
+  showShop() {
     this.menuOverlay.classList.add("hidden");
     this.settingsOverlay.classList.add("hidden");
     this.controlsOverlay.classList.remove("hidden");
+    this.updateShop();
   }
 
   showLoading(levelLabel = "") {
@@ -2483,6 +2689,10 @@ class GameManager {
     this.audio = new AudioManager();
     this.speedrunMode = false;
     this.touchControlsMode = this.loadTouchControlsMode();
+    this.ownedSkins = SaveSystem.getOwnedSkins();
+    this.selectedSkinId = SaveSystem.getSelectedSkin();
+    if (!this.ownedSkins.has(this.selectedSkinId)) this.selectedSkinId = DEFAULT_SKIN_ID;
+    this.skinWallet = SaveSystem.getSkinWallet();
     this.ui = new UIManager(this);
     this.mobileControls = new MobileControls(this);
     this.levelGenerator = new ProceduralLevelGenerator();
@@ -2510,10 +2720,12 @@ class GameManager {
     this.bindControls();
     this.resize();
     window.addEventListener("resize", () => this.resize());
+    document.addEventListener("fullscreenchange", () => this.resize());
+    document.addEventListener("webkitfullscreenchange", () => this.resize());
     const coarsePointerQuery = window.matchMedia ? window.matchMedia("(pointer: coarse)") : null;
     coarsePointerQuery?.addEventListener?.("change", () => this.updateTouchControlsVisibility());
 
-    this.sprites.load();
+    this.sprites.load(this.selectedSkinId);
     loadCollectibleImages();
     loadEnemyImages();
     loadUiImages();
@@ -2541,6 +2753,33 @@ class GameManager {
     this.updateTouchControlsVisibility();
   }
 
+  getFullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+
+  toggleFullscreen() {
+    const target = document.querySelector(".game-shell") || this.canvas;
+    const current = this.getFullscreenElement();
+    if (current || target.classList.contains("is-faux-fullscreen")) {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (current) exit?.call(document);
+      target.classList.remove("is-faux-fullscreen");
+      this.resize();
+      return;
+    }
+
+    const request = target.requestFullscreen || target.webkitRequestFullscreen;
+    if (!request) {
+      target.classList.add("is-faux-fullscreen");
+      this.resize();
+      return;
+    }
+    request.call(target)?.catch?.(() => {
+      target.classList.add("is-faux-fullscreen");
+      this.resize();
+    });
+  }
+
   loadTouchControlsMode() {
     try {
       const raw = localStorage.getItem("odysejaWolbromska.touchControlsMode");
@@ -2560,6 +2799,29 @@ class GameManager {
     this.updateTouchControlsVisibility();
   }
 
+  addSkinWalletKcal(amount) {
+    this.skinWallet = Math.floor(this.skinWallet + Math.max(0, amount));
+    SaveSystem.setSkinWallet(this.skinWallet);
+  }
+
+  async handleSkinShopAction(skinId) {
+    const skin = PLAYER_SKINS[skinId];
+    if (!skin) return false;
+
+    if (!this.ownedSkins.has(skinId)) {
+      if (this.skinWallet < skin.price) return false;
+      this.skinWallet -= skin.price;
+      this.ownedSkins.add(skinId);
+      SaveSystem.setSkinWallet(this.skinWallet);
+      SaveSystem.setOwnedSkins(this.ownedSkins);
+    }
+
+    this.selectedSkinId = skinId;
+    SaveSystem.setSelectedSkin(skinId);
+    await this.sprites.load(skinId);
+    return true;
+  }
+
   shouldShowTouchControls() {
     if (this.touchControlsMode === "on") return true;
     if (this.touchControlsMode === "off") return false;
@@ -2569,6 +2831,7 @@ class GameManager {
   updateTouchControlsVisibility() {
     const stateAllowsControls = this.state === "playing";
     this.mobileControls?.setVisible(stateAllowsControls && this.shouldShowTouchControls());
+    this.ui?.updateScreenControls();
   }
 
   isTouchHud() {
@@ -2582,6 +2845,7 @@ class GameManager {
     this.collectedCount = 0;
     this.consumedKcal = 0;
     this.nextExtraLifeKcal = 15000;
+    this.player.clearOzempicStatus(false);
     this.state = "loading";
     this.ui.showLoading(`${this.currentLevel.world} ${this.currentLevel.label}`);
     this.generateLevel();
@@ -2613,7 +2877,8 @@ class GameManager {
     this.sceneFreezeTime = null;
     this.player.spawnX = this.level.spawn ? this.level.spawn.x : 82;
     this.player.spawnY = this.level.spawn ? this.level.spawn.y : CONFIG.groundY - this.player.h;
-    this.player.checkpoint = { x: this.player.spawnX, y: this.player.spawnY };
+    this.player.spawnHeight = this.level.spawn ? CONFIG.player.drawHeight : this.player.h;
+    this.player.checkpoint = { x: this.player.spawnX, y: this.player.spawnY, standingHeight: this.player.spawnHeight };
   }
 
   async nextLevel() {
@@ -2796,7 +3061,7 @@ class GameManager {
     for (const checkpoint of this.level.checkpoints) {
       if (!checkpoint.active && Math.abs(this.player.x - checkpoint.x) < 44 && this.player.y < checkpoint.y + 110) {
         checkpoint.active = true;
-        this.player.checkpoint = { x: checkpoint.x, y: checkpoint.y };
+        this.player.checkpoint = { x: checkpoint.x, y: checkpoint.y, standingHeight: CONFIG.player.drawHeight };
         this.addFloatingText("Checkpoint", checkpoint.x, checkpoint.y - 22, "#45d4ff");
       }
     }
@@ -3028,26 +3293,36 @@ class GameManager {
     for (const d of this.level.details) {
       const parallax = d.type === "tutorial" ? 1 : d.parallax ?? 0.84;
       const x = Math.round(d.x - this.camera.x * parallax);
-      if (x + d.w < -80 || x > this.canvas.width + 80) continue;
       const y = Math.round(d.y - this.camera.y);
       if (d.type === "tutorial") {
         ctx.save();
+        ctx.font = canvasFont(800, 22);
+        const text = d.text || "";
+        const padX = 18;
+        const padY = 10;
+        const boxW = Math.max(d.w || 0, Math.ceil(ctx.measureText(text).width + padX * 2));
+        const boxH = Math.max(d.h || 0, 44, Math.ceil(22 + padY * 2));
+        const boxX = Math.round(x + ((d.w || boxW) - boxW) / 2);
+        if (boxX + boxW < -80 || boxX > this.canvas.width + 80) {
+          ctx.restore();
+          continue;
+        }
         ctx.fillStyle = "rgba(15, 18, 22, 0.76)";
-        ctx.fillRect(x, y, d.w, d.h);
+        ctx.fillRect(boxX, y, boxW, boxH);
         ctx.strokeStyle = "#ffd166";
         ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, d.w, d.h);
+        ctx.strokeRect(boxX, y, boxW, boxH);
         ctx.fillStyle = "#ffd166";
-        ctx.font = canvasFont(800, 22);
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.lineWidth = 4;
         ctx.strokeStyle = "#201900";
-        ctx.strokeText(d.text, x + d.w / 2, y + d.h / 2 + 1);
-        ctx.fillText(d.text, x + d.w / 2, y + d.h / 2 + 1);
+        ctx.strokeText(text, boxX + boxW / 2, y + boxH / 2 + 1);
+        ctx.fillText(text, boxX + boxW / 2, y + boxH / 2 + 1);
         ctx.restore();
         continue;
       }
+      if (x + d.w < -80 || x > this.canvas.width + 80) continue;
       const assetImage = d.assetPath ? this.levelAssets.getImage(d.assetPath) : null;
       if (assetImage) {
         ctx.save();
