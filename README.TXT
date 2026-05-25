@@ -14,7 +14,7 @@ Open index.html in a modern desktop browser.
 
 No server is required.
 No external JavaScript framework is required.
-Mobile devices are not currently supported.
+Mobile and touch devices are supported through optional on-screen controls.
 
 
 PROJECT STRUCTURE
@@ -38,6 +38,15 @@ PNG assets for collectible food/calorie items.
 
 assets/enemies/
 Enemy sprite assets, currently including the flying Wolbrom mouse animation.
+
+assets/buildings/
+Level-specific building sprites for front shops and background houses. These are loaded per level and unloaded when no longer needed.
+
+assets/foliage/
+Background tree sprites used in parallax suburb layers.
+
+assets/mobile-buttons/
+PNG assets for touch controls and HUD life icons.
 
 assets/audio/
 Local music and sound effects used by the game.
@@ -66,6 +75,9 @@ MAIN SYSTEMS
 GameManager
 Owns the main loop, state transitions, level loading, restart flow, completion flow, game over flow, and high-level gameplay coordination.
 
+LevelAssetManager
+Loads only the building sprites required by the current generated level, reports loading progress to the loading screen, and unloads inactive level assets.
+
 PlayerController
 Handles player movement, acceleration, sprinting, jumping, double jumping, damage, invulnerability, respawning, and sprite animation.
 
@@ -86,6 +98,9 @@ Currently works as the calorie meter. Calories drain over time, drain faster whi
 
 UIManager
 Draws the top HUD and controls menu/disclaimer/pause/result overlays.
+
+MobileControls
+Maps multi-touch on-screen buttons to the same input flags used by keyboard controls. Supports holding movement, sprint, and jump at the same time.
 
 AudioManager
 Controls gameplay music, sound effects, and separate music/SFX volume settings.
@@ -114,6 +129,9 @@ CURRENT GAMEPLAY FEATURES
 - Jump sound effect
 - Pause, restart, level completion, and game over screens
 - Disclaimer and first-start controls guide
+- Per-level loading screen for level building assets
+- Parallax suburb backdrops with houses and trees
+- Optional on-screen touch controls with Auto / On / Off setting
 
 
 KNOWN ISSUES
@@ -124,7 +142,7 @@ KNOWN ISSUES
 - Enemy AI is not fully developed and may appear buggish
 - Audio volume and looping may need further tuning.
 - Browser audio autoplay rules require the game to be started by user interaction.
-- Mobile and touch controls are not supported.
+- Touch controls are new and may need tuning on unusual mobile screen sizes.
 - UI layout may need further polishing on very small screens.
 - Sprite background cleanup is automatic and may need manual refinement for future PNG assets.
 - No custom sound for drinkables (e.g. coca cola)
@@ -137,13 +155,12 @@ TODO
 - Add more boss attacks and boss phases.
 - Add collectible spawn tuning per level type.
 - Add better checkpoint visual feedback.
-- Add settings for audio volume.
+- Add more settings for control size, opacity, and handedness.
 - Add optional debug overlay for hitboxes and generated segments.
 - Improve death, respawn, and level transition animations.
 - Add proper title screen art.
 - Add end-of-preview screen.
-- Add mobile support only if the control model is redesigned for touch.
-- Level models - including buildings contains just placeholders.
+- Some level building and foliage sprites still need additional variants.
 
 
 ASSET NOTES

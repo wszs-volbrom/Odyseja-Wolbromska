@@ -10,6 +10,14 @@
   --danger: #ef476f;
 }
 
+@font-face {
+  font-family: "VT323";
+  src: url("assets/fonts/VT323-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -28,7 +36,9 @@ body {
   background:
     linear-gradient(180deg, #343841 0%, #151922 60%, #0d1015 100%);
   color: var(--text);
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-family: "VT323", monospace;
+  line-height: 1.45;
+  overscroll-behavior: none;
 }
 
 .game-shell {
@@ -38,6 +48,7 @@ body {
   min-width: 320px;
   min-height: 360px;
   background: #111;
+  overflow: hidden;
 }
 
 canvas {
@@ -55,6 +66,7 @@ canvas {
   place-items: center;
   padding: 20px;
   background: radial-gradient(circle at 50% 38%, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.72));
+  z-index: 20;
 }
 
 .overlay.hidden {
@@ -62,8 +74,8 @@ canvas {
 }
 
 .panel {
-  width: min(520px, 94vw);
-  padding: 28px;
+  width: min(620px, 94vw);
+  padding: 32px;
   border: 1px solid var(--panel-border);
   border-radius: 8px;
   background: var(--panel);
@@ -72,11 +84,11 @@ canvas {
 }
 
 .panel.compact {
-  width: min(430px, 92vw);
+  width: min(520px, 92vw);
 }
 
 .panel.wide {
-  width: min(680px, 94vw);
+  width: min(820px, 94vw);
 }
 
 .disclaimer-text {
@@ -89,7 +101,7 @@ canvas {
 .kicker {
   margin: 0 0 10px;
   color: var(--accent);
-  font-size: 13px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -102,12 +114,13 @@ h2 {
 }
 
 h1 {
-  font-size: clamp(34px, 8vw, 64px);
-  line-height: 0.95;
+  font-size: clamp(42px, 8vw, 78px);
+  line-height: 1.18;
 }
 
 h2 {
-  font-size: clamp(28px, 6vw, 42px);
+  font-size: clamp(34px, 6vw, 58px);
+  line-height: 1.2;
 }
 
 .subtitle,
@@ -119,17 +132,22 @@ h2 {
 .subtitle {
   margin: 16px auto 22px;
   max-width: 36ch;
+  font-size: 20px;
 }
 
 .small {
   min-height: 20px;
   margin: 16px 0 0;
-  font-size: 13px;
+  font-size: 18px;
 }
 
 .menu-actions {
   display: grid;
   gap: 10px;
+}
+
+.pause-actions {
+  margin-top: 18px;
 }
 
 .debug-cheats {
@@ -151,7 +169,9 @@ button {
   background: #f7d774;
   color: #201900;
   font: inherit;
-  font-weight: 800;
+  font-size: 20px;
+  line-height: 1.35;
+  font-weight: 400;
   cursor: pointer;
   box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
 }
@@ -170,6 +190,7 @@ button:focus-visible {
   padding: 0;
   list-style: none;
   color: var(--muted);
+  font-size: 20px;
   text-align: left;
 }
 
@@ -180,6 +201,7 @@ button:focus-visible {
   padding: 0;
   list-style: none;
   color: var(--muted);
+  font-size: 19px;
   line-height: 1.42;
   text-align: left;
 }
@@ -195,8 +217,25 @@ button:focus-visible {
   border-radius: 8px;
   background: rgba(239, 71, 111, 0.12);
   color: #ffd9df;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 400;
   text-align: left;
+}
+
+.loading-bar {
+  height: 18px;
+  margin: 22px 0 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.38);
+}
+
+#loadingBarFill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #ffd166, #5fd068);
+  transition: width 140ms ease;
 }
 
 .settings-list {
@@ -211,7 +250,8 @@ button:focus-visible {
   align-items: center;
   gap: 12px;
   color: var(--muted);
-  font-weight: 700;
+  font-size: 19px;
+  font-weight: 400;
   text-align: left;
 }
 
@@ -225,13 +265,156 @@ button:focus-visible {
   text-align: right;
 }
 
+.settings-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 19px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.settings-row select {
+  min-height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: rgba(0, 0, 0, 0.32);
+  color: var(--text);
+  font: inherit;
+  font-size: 19px;
+  font-weight: 400;
+}
+
+.settings-row small {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.mobile-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  user-select: none;
+  touch-action: none;
+}
+
+.mobile-controls.hidden {
+  display: none;
+}
+
+.mobile-controls-left,
+.mobile-controls-right {
+  position: absolute;
+  bottom: max(22px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: clamp(10px, 3.2vw, 22px);
+  pointer-events: auto;
+}
+
+.mobile-controls-left {
+  left: max(22px, env(safe-area-inset-left));
+}
+
+.mobile-controls-right {
+  right: max(22px, env(safe-area-inset-right));
+  align-items: center;
+  flex-direction: column;
+}
+
+.touch-button {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  opacity: 0.84;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.touch-button:hover,
+.touch-button:focus-visible {
+  background: transparent;
+  outline: none;
+}
+
+.touch-button.is-active {
+  opacity: 1;
+  transform: translateY(1px) scale(0.97);
+}
+
+.touch-button img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
+.touch-button-square {
+  width: clamp(64px, 16vw, 94px);
+  height: clamp(64px, 16vw, 94px);
+}
+
+.touch-button-jump {
+  width: clamp(94px, 24vw, 132px);
+  height: clamp(94px, 24vw, 132px);
+}
+
+.touch-button-sprint {
+  width: clamp(82px, 20vw, 112px);
+  height: clamp(42px, 10vw, 58px);
+  margin-top: -4px;
+}
+
+.touch-button-pause {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  width: clamp(42px, 10vw, 58px);
+  height: clamp(42px, 10vw, 58px);
+  pointer-events: auto;
+}
+
 @media (max-width: 640px) {
   .game-shell {
     width: 100vw;
-    height: 100vh;
+    height: 100dvh;
+    min-height: 100dvh;
   }
 
   .panel {
     padding: 22px;
+  }
+
+  .overlay {
+    padding: 14px;
+  }
+
+  .volume-row {
+    grid-template-columns: 72px 1fr 42px;
+    gap: 9px;
+  }
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+  body {
+    place-items: stretch;
+  }
+
+  .game-shell {
+    width: 100vw;
+    height: 100dvh;
+    max-width: none;
   }
 }

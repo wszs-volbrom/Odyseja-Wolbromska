@@ -17,7 +17,7 @@
         <p class="kicker">Uwaga uwaga</p>
         <h2>Disclaimer</h2>
         <p class="disclaimer-text">
-          Grasz w wczesną, rozwojową wersję Odysei Wolbromskiej. Oznacza to, że część mechanik, poziomów, przeciwników, animacji i balansu może jeszcze działać dziwnie, wyglądać roboczo albo zachowywać się tak, jakby sama gra też potrzebowała paska głodu. Błędy, glitche, niedoróbki i absurdalne sytuacje są na tym etapie spodziewane. Finalna wersja gry może znacząco różnić się od obecnej - zarówno wizualnie, jak i gameplayowo. Wszelkie sugestie można zgłaszać albo w DM na Instagramie: @wszs.volbrom lub mailowo: wszs.volbrom@proton.me
+          Grasz we wczesną, rozwojową wersję Odysei Wolbromskiej. Oznacza to, że część mechanik, poziomów, przeciwników, animacji i balansu może jeszcze działać dziwnie, wyglądać roboczo albo zachowywać się tak, jakby sama gra też potrzebowała paska głodu. Błędy, glitche, niedoróbki i absurdalne sytuacje są na tym etapie spodziewane. Finalna wersja gry może znacząco różnić się od obecnej - zarówno wizualnie, jak i gameplayowo. Wszelkie sugestie można zgłaszać albo w DM na Instagramie: @wszs.volbrom lub mailowo: wszs.volbrom@proton.me
         </p>
         <button id="acceptDisclaimerButton">ROZUMIEM - ZAŁADUJ GRĘ</button>
       </div>
@@ -26,7 +26,7 @@
     <section id="menuOverlay" class="overlay hidden">
       <div class="panel">
         <p class="kicker">V 0.4.624052026-3 PREVIEW</p>
-        <h1>Odyseja Wolbromska</h1>
+        <h2>Odyseja Wolbromska</h2>
         <p class="subtitle">Zbieraj pyszności. Zabierz Wolbrzymkę do Dupaju.</p>
         <div class="menu-actions">
           <button id="startButton">Start!</button>
@@ -47,7 +47,23 @@
     <section id="pauseOverlay" class="overlay hidden">
       <div class="panel compact">
         <h2>Pauza</h2>
-        <p>Esc wraca do gry. R restartuje poziom.</p>
+        <p>Gra zatrzymana.</p>
+        <div class="menu-actions pause-actions">
+          <button id="resumeButton">Wróć do gry</button>
+          <button id="pauseRestartButton">Restart poziomu</button>
+          <button id="pauseMenuButton">Menu</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="loadingOverlay" class="overlay hidden">
+      <div class="panel compact">
+        <p class="kicker">Loading</p>
+        <h2 id="loadingTitle">Ładowanie poziomu</h2>
+        <div class="loading-bar">
+          <div id="loadingBarFill"></div>
+        </div>
+        <p id="loadingDetails" class="small">Przygotowywanie assetów...</p>
       </div>
     </section>
 
@@ -63,7 +79,7 @@
           <li><strong>Restart poziomu:</strong> R.</li>
           <li><strong>Pauza:</strong> Esc.</li>
         </ul>
-        <p class="mobile-warning">Obecnie brak wsparcia dla urządzeń mobilnych. Gra jest projektowana pod klawiaturę.</p>
+        <p class="mobile-warning">Na telefonach i tabletach możesz grać przyciskami ekranowymi. Jeśli ich nie widzisz, sprawdź opcję „Przyciski ekranowe” w ustawieniach.</p>
         <button id="beginGameButton">ROZUMIEM - START</button>
       </div>
     </section>
@@ -78,6 +94,7 @@
           <li>Spacja w powietrzu: double jump za 500 kcal</li>
           <li>Dwa razy D / → albo A / ←: sprint</li>
           <li>Shift: alternatywny sprint</li>
+          <li>Dotyk: przyciski ekranowe lewo/prawo/skok/sprint</li>
           <li>Esc: pauza</li>
           <li>R: restart poziomu</li>
         </ul>
@@ -99,6 +116,15 @@
             <input id="sfxVolumeSlider" type="range" min="0" max="100" value="100">
             <strong id="sfxVolumeValue">100%</strong>
           </label>
+          <label class="settings-row" for="touchControlsMode">
+            <span>Przyciski ekranowe</span>
+            <select id="touchControlsMode">
+              <option value="auto">Auto</option>
+              <option value="on">Włączone</option>
+              <option value="off">Wyłączone</option>
+            </select>
+            <small>Pokazuje sterowanie dotykowe na telefonach i tabletach.</small>
+          </label>
         </div>
         <button id="settingsBackButton">Wróć</button>
       </div>
@@ -115,8 +141,30 @@
         </div>
       </div>
     </section>
+
+    <div id="mobileControls" class="mobile-controls hidden" aria-label="Przyciski ekranowe">
+      <div class="mobile-controls-left">
+        <button class="touch-button touch-button-square" type="button" data-touch-action="left" aria-label="Lewo">
+          <img src="assets/mobile-buttons/back-arrow.png" alt="">
+        </button>
+        <button class="touch-button touch-button-square" type="button" data-touch-action="right" aria-label="Prawo">
+          <img src="assets/mobile-buttons/forward-arrow.png" alt="">
+        </button>
+      </div>
+      <div class="mobile-controls-right">
+        <button class="touch-button touch-button-jump" type="button" data-touch-action="jump" aria-label="Skok">
+          <img src="assets/mobile-buttons/jump.png" alt="">
+        </button>
+        <button class="touch-button touch-button-sprint" type="button" data-touch-action="sprint" aria-label="Sprint">
+          <img src="assets/mobile-buttons/sprint.png" alt="">
+        </button>
+      </div>
+      <button class="touch-button touch-button-pause" type="button" data-touch-action="pause" aria-label="Pauza">
+        <img src="assets/mobile-buttons/pause.png" alt="">
+      </button>
+    </div>
   </main>
 
-  <script src="game.js?v=34"></script>
+  <script src="game.js?v=41"></script>
 </body>
 </html>

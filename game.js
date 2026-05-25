@@ -27,6 +27,36 @@ const CONFIG = {
   }
 };
 
+const GAME_FONT = "\"VT323\", monospace";
+const canvasFont = (weight, size) => `${weight} ${size}px ${GAME_FONT}`;
+
+function drawNameTag(ctx, text, x, y, size = 18) {
+  ctx.save();
+  ctx.font = canvasFont(800, size);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const padX = 8;
+  const padY = 4;
+  const metrics = ctx.measureText(text);
+  const boxW = Math.ceil(metrics.width + padX * 2);
+  const boxH = Math.ceil(size + padY * 2);
+  const boxX = Math.round(x - boxW / 2);
+  const boxY = Math.round(y - boxH / 2);
+  ctx.fillStyle = "rgba(18, 22, 28, 0.78)";
+  ctx.strokeStyle = "#fff7dd";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(boxX, boxY, boxW, boxH, 4);
+  ctx.fill();
+  ctx.stroke();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "#201900";
+  ctx.fillStyle = "#fff7dd";
+  ctx.strokeText(text, x, y + 1);
+  ctx.fillText(text, x, y + 1);
+  ctx.restore();
+}
+
 const CAMPAIGN_LEVELS = [
   { label: "1-1", world: "PRZEDMIEŚCIA WOLBROMIA", difficulty: 0.08, length: 5600, boss: false, theme: "suburbs" },
   { label: "1-2", world: "WOLBROM CENTRUM", difficulty: 0.2, length: 6400, boss: false, theme: "center" },
@@ -92,6 +122,10 @@ const ENEMY_SPRITES = {
   ]
 };
 const ENEMY_IMAGES = new Map();
+const UI_ASSETS = {
+  live: "assets/mobile-buttons/live.png"
+};
+const UI_IMAGES = new Map();
 
 // Add new audio here. Use musicBg for looping/background tracks and sfxEffects for one-shot gameplay sounds.
 const AUDIO_ASSETS = {
@@ -104,6 +138,46 @@ const AUDIO_ASSETS = {
     enemyDefeated: "assets/audio/SFX-effects/enemy-defeated.mp3",
     collectible: "assets/audio/SFX-effects/pysznosci.mp3",
     hungerWarning: "assets/audio/SFX-effects/dajmijesc.mp3"
+  }
+};
+
+const BUILDING_ASSETS = {
+  center: {
+    frogshopSmall: [
+      "assets/buildings/center/frogshop-small.png",
+      "assets/buildings/center/frogshop-small2.png",
+      "assets/buildings/center/frogshop-small3.png"
+    ]
+  },
+  blocks: {
+    frogshopCity: [
+      "assets/buildings/blocks/frogshop-city.png",
+      "assets/buildings/blocks/frogshop-city2.png"
+    ]
+  },
+  suburbs: {
+    house: [
+      "assets/buildings/suburbs/lvl1house1.png",
+      "assets/buildings/suburbs/lvl1house2.png",
+      "assets/buildings/suburbs/lvl1house3.png",
+      "assets/buildings/suburbs/lvl1house4.png",
+      "assets/buildings/suburbs/lvl1house5.png",
+      "assets/buildings/suburbs/lvl1house6.png"
+    ],
+    piekarnia: ["assets/buildings/suburbs/piekarnia.png"],
+    cukiernia: ["assets/buildings/suburbs/cukiernia.png"],
+    warzywniak: ["assets/buildings/suburbs/warzywniak.png"],
+    sklepuani: ["assets/buildings/suburbs/sklepuani.png"],
+    arabskiMasaz: ["assets/buildings/suburbs/arabski-masaz.png"]
+  },
+  foliage: {
+    trees: [
+      "assets/foliage/tree01.png",
+      "assets/foliage/tree02.png",
+      "assets/foliage/tree03.png",
+      "assets/foliage/tree04.png",
+      "assets/foliage/tree05.png"
+    ]
   }
 };
 
@@ -205,7 +279,9 @@ function makeEdgeTransparentCanvas(img) {
 class InputManager {
   constructor() {
     this.keys = new Set();
+    this.virtualKeys = new Set();
     this.pressed = new Set();
+    this.virtualPressed = new Set();
     this.handlers = new Map();
     this.lastTap = { left: -Infinity, right: -Infinity };
     this.sprintDirection = 0;
@@ -228,6 +304,12 @@ class InputManager {
     window.addEventListener("keyup", (event) => {
       this.keys.delete(event.code);
     });
+
+    window.addEventListener("blur", () => {
+      this.keys.clear();
+      this.virtualKeys.clear();
+      this.virtualPressed.clear();
+    });
   }
 
   bind(code, fn) {
@@ -240,6 +322,21 @@ class InputManager {
       if (this.sprintTimer <= 0) this.sprintDirection = 0;
     }
     this.pressed.clear();
+    this.virtualPressed.clear();
+  }
+
+  pressVirtual(code) {
+    if (!this.virtualKeys.has(code)) this.virtualPressed.add(code);
+    this.virtualKeys.add(code);
+  }
+
+  releaseVirtual(code) {
+    this.virtualKeys.delete(code);
+  }
+
+  clearVirtual() {
+    this.virtualKeys.clear();
+    this.virtualPressed.clear();
   }
 
   detectDoubleTap(code) {
@@ -266,11 +363,11 @@ class InputManager {
   }
 
   down(...codes) {
-    return codes.some((code) => this.keys.has(code));
+    return codes.some((code) => this.keys.has(code) || this.virtualKeys.has(code));
   }
 
   justPressed(...codes) {
-    return codes.some((code) => this.pressed.has(code));
+    return codes.some((code) => this.pressed.has(code) || this.virtualPressed.has(code));
   }
 }
 
@@ -551,6 +648,70 @@ class SpriteLoader {
   }
 }
 
+function detectTouchDevice() {
+  return Boolean(
+    (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) ||
+    "ontouchstart" in window ||
+    (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
+    window.innerWidth <= 760
+  );
+}
+
+class LevelAssetManager {
+  constructor() {
+    this.images = new Map();
+    this.activePaths = new Set();
+  }
+
+  getImage(path) {
+    return this.images.get(path) || null;
+  }
+
+  async loadForLevel(level, onProgress = () => {}) {
+    const levelVisuals = [...(level.details || []), ...(level.backdrops || [])];
+    const paths = [...new Set(levelVisuals.map((detail) => detail.assetPath).filter(Boolean))];
+    this.activePaths = new Set(paths);
+    if (!paths.length) {
+      onProgress(1, 0, 0);
+      this.unloadInactive();
+      return;
+    }
+
+    let done = 0;
+    onProgress(0, done, paths.length);
+    await Promise.all(paths.map((path) => this.loadImage(path).finally(() => {
+      done += 1;
+      onProgress(done / paths.length, done, paths.length);
+    })));
+    this.unloadInactive();
+  }
+
+  loadImage(path) {
+    if (this.images.has(path)) return Promise.resolve(this.images.get(path));
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let processed = img;
+        try {
+          processed = makeEdgeTransparentCanvas(img);
+        } catch {
+          processed = img;
+        }
+        this.images.set(path, processed);
+        resolve(processed);
+      };
+      img.onerror = () => resolve(null);
+      img.src = path;
+    });
+  }
+
+  unloadInactive() {
+    for (const path of this.images.keys()) {
+      if (!this.activePaths.has(path)) this.images.delete(path);
+    }
+  }
+}
+
 function loadCollectibleImages() {
   for (const type of COLLECTIBLE_TYPES) {
     if (!type.image || COLLECTIBLE_IMAGES.has(type.name)) continue;
@@ -578,6 +739,21 @@ function loadEnemyImages() {
       };
       img.src = path;
     });
+  }
+}
+
+function loadUiImages() {
+  for (const [key, path] of Object.entries(UI_ASSETS)) {
+    if (UI_IMAGES.has(key)) continue;
+    const img = new Image();
+    img.onload = () => {
+      try {
+        UI_IMAGES.set(key, makeEdgeTransparentCanvas(img));
+      } catch {
+        UI_IMAGES.set(key, img);
+      }
+    };
+    img.src = path;
   }
 }
 
@@ -794,7 +970,7 @@ class CollectibleItem {
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = "#201900";
-      ctx.font = "700 10px Segoe UI";
+      ctx.font = canvasFont(700, 10);
       ctx.textAlign = "center";
       ctx.fillText(this.type.short, x + this.w / 2, y + 24);
     }
@@ -880,10 +1056,7 @@ class EnemyBase {
     ctx.stroke();
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.fillRect(x + 6, y + this.h - 8, this.w - 12, 4);
-    ctx.fillStyle = "#fff7dd";
-    ctx.font = "700 10px Segoe UI";
-    ctx.textAlign = "center";
-    ctx.fillText(this.name, x + this.w / 2, y - 6);
+    drawNameTag(ctx, this.name, x + this.w / 2, y - 10, 18);
     if (this.maxHp > 1) {
       ctx.fillStyle = "#111";
       ctx.fillRect(x, y + this.h + 4, this.w, 5);
@@ -1083,14 +1256,13 @@ class FlyerEnemy extends EnemyBase {
     }
     ctx.restore();
 
-    ctx.save();
-    ctx.shadowColor = "transparent";
-    ctx.fillStyle = "#fff7dd";
-    ctx.font = "700 10px Segoe UI";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "alphabetic";
-    ctx.fillText(this.name, Math.round(this.x - camera.x + this.w / 2), Math.round(this.y - camera.y - 8));
-    ctx.restore();
+    drawNameTag(
+      ctx,
+      this.name,
+      Math.round(this.x - camera.x + this.w / 2),
+      Math.round(this.y - camera.y - 12),
+      17
+    );
   }
 }
 
@@ -1208,7 +1380,7 @@ class BossFlyingTrackerEnemy extends EnemyBase {
     ctx.fillStyle = "#f7d774";
     ctx.fillRect(x + 17, y + 16, this.w - 34, 18);
     ctx.fillStyle = "#251900";
-    ctx.font = "800 10px Segoe UI";
+    ctx.font = canvasFont(800, 10);
     ctx.textAlign = "center";
     ctx.fillText("RYNEK", x + this.w / 2, y + 29);
     ctx.fillStyle = "#fff7dd";
@@ -1258,7 +1430,7 @@ class BossProjectile {
     ctx.strokeStyle = "#7a3f18";
     ctx.strokeRect(x, y, this.w, this.h);
     ctx.fillStyle = "#7a3f18";
-    ctx.font = "800 8px Segoe UI";
+    ctx.font = canvasFont(800, 8);
     ctx.textAlign = "center";
     ctx.fillText("VAT", x + this.w / 2, y + 11);
     ctx.restore();
@@ -1312,7 +1484,7 @@ class EnemyProjectile {
     ctx.strokeStyle = this.type === "andziaks" ? "#7a3f18" : "#185c31";
     ctx.strokeRect(x, y, this.w, this.h);
     ctx.fillStyle = this.type === "andziaks" ? "#7a3f18" : "#185c31";
-    ctx.font = "800 8px Segoe UI";
+    ctx.font = canvasFont(800, 8);
     ctx.textAlign = "center";
     ctx.fillText(this.type === "andziaks" ? "BT" : "FIT", x + this.w / 2, y + (this.type === "andziaks" ? 14 : 12));
     ctx.restore();
@@ -1367,7 +1539,7 @@ class TestBossProjectile {
     ctx.strokeStyle = "#211713";
     ctx.strokeRect(x, y, this.w, this.h);
     ctx.fillStyle = "#211713";
-    ctx.font = "800 8px Segoe UI";
+    ctx.font = canvasFont(800, 8);
     ctx.textAlign = "center";
     ctx.fillText(this.variant === "wide" ? "!!!" : ">", x + this.w / 2, y + 11);
     ctx.restore();
@@ -1456,10 +1628,7 @@ class TestArenaBossEnemy extends EnemyBase {
     ctx.fillRect(x + this.w - 28, y + 20, 14, 12);
     ctx.fillStyle = "#ffd166";
     ctx.fillRect(x + 17, y + 52, this.w - 34, 8);
-    ctx.fillStyle = "#fff7dd";
-    ctx.font = "800 12px Segoe UI";
-    ctx.textAlign = "center";
-    ctx.fillText(this.name, x + this.w / 2, y - 8);
+    drawNameTag(ctx, this.name, x + this.w / 2, y - 12, 19);
     ctx.fillStyle = "#111";
     ctx.fillRect(x, y + this.h + 5, this.w, 7);
     ctx.fillStyle = "#ffd166";
@@ -1499,16 +1668,19 @@ class ProceduralLevelGenerator {
     const length = config ? config.length : 5600 + (levelNumber - 1) * 850;
     const platforms = [];
     const details = [];
+    const backdrops = [];
     const collectibles = [];
     const enemies = [];
     const checkpoints = [];
+    const theme = config ? config.theme : "suburbs";
     const sprintGapTarget = length * this.rand(0.34, 0.58);
     let sprintGapPlaced = false;
 
     let x = 0;
     let y = CONFIG.groundY;
     platforms.push({ x: 0, y, w: 560, h: 92, kind: "ground" });
-    this.addTownDetails(details, 0, 560, y, false, config ? config.theme : "suburbs");
+    this.addBackdropDetails(backdrops, length, theme);
+    this.addTownDetails(details, 0, 560, y, false, theme);
 
     x = 560;
 
@@ -1533,7 +1705,11 @@ class ProceduralLevelGenerator {
 
       const platform = { x: Math.round(x), y: Math.round(nextY), w: Math.round(width), h: 92, kind: "ground" };
       platforms.push(platform);
-      this.addTownDetails(details, platform.x, platform.w, platform.y, false, config ? config.theme : "suburbs");
+      const farFromFinish = platform.x + platform.w < length - 1100;
+      const hasRoomForFront = platform.w >= (theme === "suburbs" ? 360 : 320);
+      if (!hasGap && farFromFinish && hasRoomForFront) {
+        this.addTownDetails(details, platform.x, platform.w, platform.y, false, theme);
+      }
 
       if (hasGap) {
         this.addSingleCollectible(
@@ -1546,10 +1722,10 @@ class ProceduralLevelGenerator {
           sprintGapPlaced = true;
           if (config && config.label === "1-1") {
             details.push({
-              x: previousEnd + gap * 0.5 - 72,
+              x: previousEnd + gap * 0.5 - 120,
               y: Math.min(y, nextY) - 150,
-              w: 180,
-              h: 28,
+              w: 240,
+              h: 44,
               type: "tutorial",
               text: "Użyj sprintu! >>>"
             });
@@ -1581,7 +1757,6 @@ class ProceduralLevelGenerator {
     const finishX = Math.round(Math.min(length - 420, x + this.rand(112, 160)));
     const finishPlatform = { x: finishX, y: CONFIG.groundY, w: 560, h: 92, kind: "ground" };
     platforms.push(finishPlatform);
-    this.addTownDetails(details, finishPlatform.x, finishPlatform.w, finishPlatform.y, true, config ? config.theme : "suburbs");
     this.addSingleCollectible(collectibles, finishPlatform.x + 120, finishPlatform.y - 76, speedrunMode, "Zestaw McD Powiększony");
     this.addSingleCollectible(collectibles, finishPlatform.x + 330, finishPlatform.y - 92, speedrunMode, "Kubełek KFC");
 
@@ -1593,6 +1768,7 @@ class ProceduralLevelGenerator {
       width: finishPlatform.x + finishPlatform.w,
       platforms,
       details,
+      backdrops,
       collectibles,
       enemies,
       checkpoints,
@@ -1631,6 +1807,7 @@ class ProceduralLevelGenerator {
       width,
       platforms,
       details,
+      backdrops: [],
       collectibles,
       enemies,
       checkpoints: [],
@@ -1706,35 +1883,171 @@ class ProceduralLevelGenerator {
   }
 
   addTownDetails(details, x, w, groundY, finale = false, theme = "center") {
+    if (!finale && w < (theme === "suburbs" ? 330 : 300)) return;
     const signSets = {
       suburbs: ["PIEKARNIA", "CUKIERNIA", "SKLEP U ANI", "WARZYWNIAK", "ARABSKI MASAŻ STOPY"],
       center: ["ŻABKA", "MONOPOLOWY", "PIEKARNIA", "CUKIERNIA", "LEWIATAN", "ROSSMANN"],
       blocks: ["BIEDRONKA", "LEWIATAN", "APTEKA", "ŻABKA", "LOMBARD", "PIZZA"],
-      market: ["ŻABKA", "MONOPOLOWY", "ROSSMANN", "BIEDRONKA", "CUKIERNIA", "McD POWIĘKSZONY"]
+      market: ["ŻABKA", "MONOPOLOWY", "ROSSMANN", "BIEDRONKA", "CUKIERNIA", "MC Donalds"]
     };
     const typeSets = {
-      suburbs: ["house", "house", "shop", "stop"],
+      suburbs: ["shop", "shop", "shop", "stop"],
       center: ["shop", "block", "shop", "stop"],
       blocks: ["block", "block", "shop", "stop"],
       market: ["shop", "shop", "block", "stop"]
     };
     const signs = signSets[theme] || signSets.center;
     const types = typeSets[theme] || typeSets.center;
-    const count = Math.max(1, Math.floor(w / (theme === "suburbs" ? 260 : 220)));
+    const slot = theme === "suburbs" ? 255 : 235;
+    const count = Math.max(1, Math.floor(w / slot));
     for (let i = 0; i < count; i += 1) {
       const type = types[Math.floor(this.rand(0, types.length))];
-      const detailW = type === "house" ? this.rand(95, 145) : this.rand(110, 176);
-      const detailH = type === "house" ? this.rand(62, 96) : this.rand(84, 175);
+      const sign = finale ? "META" : signs[Math.floor(this.rand(0, signs.length))];
+      const assetPath = this.resolveDetailAsset(theme, type, sign);
+      const size = this.getDetailDimensions(theme, type, sign, assetPath);
+      const slotX = x + i * slot;
+      const centeredOffset = Math.max(10, (slot - size.w) * 0.5);
       details.push({
-        x: x + i * (theme === "suburbs" ? 260 : 220) + this.rand(12, 70),
-        y: groundY - detailH - this.rand(12, 42),
-        w: detailW,
-        h: detailH,
+        x: Math.round(slotX + centeredOffset + this.rand(-10, 10)),
+        y: Math.round(groundY - size.h),
+        w: Math.round(size.w),
+        h: Math.round(size.h),
         type,
         theme,
-        sign: finale ? "META" : signs[Math.floor(this.rand(0, signs.length))]
+        sign,
+        assetPath,
+        parallax: type === "stop" ? 0.72 : 0.9
       });
     }
+  }
+
+  addBackdropDetails(backdrops, length, theme = "center") {
+    if (theme !== "suburbs") return;
+    const houseBaseline = CONFIG.groundY - 42;
+    const treeBaseline = CONFIG.groundY - 35;
+    for (let x = -260; x < length + 640; x += this.rand(390, 560)) {
+      if (this.random() < 0.82) {
+        const h = this.rand(285, 395);
+        const w = this.rand(430, 650);
+        backdrops.push({
+          x: Math.round(x + this.rand(-34, 34)),
+          y: Math.round(houseBaseline - h),
+          w: Math.round(w),
+          h: Math.round(h),
+          type: "backdrop-house",
+          assetPath: this.pickAsset(BUILDING_ASSETS.suburbs.house),
+          parallax: this.rand(0.22, 0.32),
+          alpha: 0.7
+        });
+      }
+      if (this.random() < 0.42) {
+        const h = this.rand(135, 220);
+        const w = h * this.rand(0.58, 0.86);
+        backdrops.push({
+          x: Math.round(x + this.rand(155, 270)),
+          y: Math.round(treeBaseline - h),
+          w: Math.round(w),
+          h: Math.round(h),
+          type: "backdrop-tree",
+          assetPath: this.pickAsset(BUILDING_ASSETS.foliage.trees),
+          parallax: this.rand(0.18, 0.28),
+          alpha: 0.62
+        });
+      }
+    }
+  }
+
+  resolveDetailAsset(theme, type, sign) {
+    const label = String(sign || "").toUpperCase();
+    if (theme === "suburbs" && label.includes("PIEK")) return this.pickAsset(BUILDING_ASSETS.suburbs.piekarnia);
+    if (theme === "suburbs" && label.includes("CUK")) return this.pickAsset(BUILDING_ASSETS.suburbs.cukiernia);
+    if (theme === "suburbs" && label.includes("WARZ")) return this.pickAsset(BUILDING_ASSETS.suburbs.warzywniak);
+    if (theme === "suburbs" && label.includes("ANI")) return this.pickAsset(BUILDING_ASSETS.suburbs.sklepuani);
+    if (theme === "suburbs" && label.includes("ARAB")) return this.pickAsset(BUILDING_ASSETS.suburbs.arabskiMasaz);
+    if (theme === "center" && label.includes("ABKA")) return this.pickAsset(BUILDING_ASSETS.center.frogshopSmall);
+    if ((theme === "blocks" || theme === "market") && label.includes("ABKA")) return this.pickAsset(BUILDING_ASSETS.blocks.frogshopCity);
+    return null;
+  }
+
+  pickAsset(paths) {
+    if (!paths || !paths.length) return null;
+    return paths[Math.floor(this.rand(0, paths.length))];
+  }
+
+  getDetailDimensions(theme, type, sign, assetPath) {
+    if (assetPath && assetPath.includes("frogshop-city")) return { w: 260, h: 305 };
+    if (assetPath && assetPath.includes("frogshop-small")) return { w: 205, h: 168 };
+    if (assetPath && assetPath.includes("lvl1house")) return { w: 172, h: 108 };
+    if (assetPath && assetPath.includes("arabski-masaz")) return { w: 210, h: 225 };
+    if (assetPath) return { w: theme === "suburbs" ? 198 : 210, h: theme === "suburbs" ? 170 : 185 };
+    if (type === "house") return { w: this.rand(95, 145), h: this.rand(62, 96) };
+    if (type === "block") return { w: this.rand(128, 178), h: this.rand(135, 225) };
+    if (type === "stop") return { w: this.rand(105, 150), h: this.rand(62, 90) };
+    return { w: this.rand(110, 176), h: this.rand(84, 175) };
+  }
+}
+
+class MobileControls {
+  constructor(game) {
+    this.game = game;
+    this.root = document.getElementById("mobileControls");
+    this.activePointers = new Map();
+    this.actionToCode = {
+      left: "ArrowLeft",
+      right: "ArrowRight",
+      jump: "Space",
+      sprint: "ShiftLeft"
+    };
+    this.bind();
+  }
+
+  bind() {
+    if (!this.root) return;
+    this.root.querySelectorAll("[data-touch-action]").forEach((button) => {
+      button.addEventListener("pointerdown", (event) => this.handleDown(event, button));
+      button.addEventListener("pointerup", (event) => this.handleUp(event, button));
+      button.addEventListener("pointercancel", (event) => this.handleUp(event, button));
+      button.addEventListener("lostpointercapture", (event) => this.handleUp(event, button));
+      button.addEventListener("contextmenu", (event) => event.preventDefault());
+    });
+  }
+
+  handleDown(event, button) {
+    event.preventDefault();
+    const action = button.dataset.touchAction;
+    if (action === "pause") {
+      if (this.game.state === "playing") this.game.pause();
+      else if (this.game.state === "paused") this.game.resume();
+      return;
+    }
+    const code = this.actionToCode[action];
+    if (!code) return;
+    button.setPointerCapture?.(event.pointerId);
+    this.activePointers.set(event.pointerId, { action, code, button });
+    button.classList.add("is-active");
+    this.game.input.pressVirtual(code);
+  }
+
+  handleUp(event, button) {
+    const active = this.activePointers.get(event.pointerId);
+    if (!active) return;
+    event.preventDefault();
+    this.activePointers.delete(event.pointerId);
+    active.button.classList.remove("is-active");
+    const stillHeld = [...this.activePointers.values()].some((item) => item.code === active.code);
+    if (!stillHeld) this.game.input.releaseVirtual(active.code);
+  }
+
+  clear() {
+    this.activePointers.clear();
+    this.root?.querySelectorAll(".is-active").forEach((button) => button.classList.remove("is-active"));
+    this.game.input.clearVirtual();
+  }
+
+  setVisible(visible) {
+    if (!this.root) return;
+    this.root.classList.toggle("hidden", !visible);
+    if (!visible) this.clear();
   }
 }
 
@@ -1744,6 +2057,7 @@ class UIManager {
     this.disclaimerOverlay = document.getElementById("disclaimerOverlay");
     this.menuOverlay = document.getElementById("menuOverlay");
     this.startGuideOverlay = document.getElementById("startGuideOverlay");
+    this.loadingOverlay = document.getElementById("loadingOverlay");
     this.pauseOverlay = document.getElementById("pauseOverlay");
     this.controlsOverlay = document.getElementById("controlsOverlay");
     this.settingsOverlay = document.getElementById("settingsOverlay");
@@ -1755,8 +2069,12 @@ class UIManager {
     this.skipLevelToggle = document.getElementById("skipLevelToggle");
     this.musicVolumeSlider = document.getElementById("musicVolumeSlider");
     this.sfxVolumeSlider = document.getElementById("sfxVolumeSlider");
+    this.touchControlsModeSelect = document.getElementById("touchControlsMode");
     this.musicVolumeValue = document.getElementById("musicVolumeValue");
     this.sfxVolumeValue = document.getElementById("sfxVolumeValue");
+    this.loadingTitle = document.getElementById("loadingTitle");
+    this.loadingDetails = document.getElementById("loadingDetails");
+    this.loadingBarFill = document.getElementById("loadingBarFill");
 
     document.getElementById("acceptDisclaimerButton").addEventListener("click", () => this.showMenu());
     document.getElementById("startButton").addEventListener("click", () => {
@@ -1789,12 +2107,19 @@ class UIManager {
     document.getElementById("nextLevelButton").addEventListener("click", () => game.nextLevel());
     document.getElementById("retryButton").addEventListener("click", () => game.restartLevel());
     document.getElementById("menuButton").addEventListener("click", () => game.returnToMenu());
+    document.getElementById("resumeButton").addEventListener("click", () => game.resume());
+    document.getElementById("pauseRestartButton").addEventListener("click", () => game.restartLevel());
+    document.getElementById("pauseMenuButton").addEventListener("click", () => game.returnToMenu());
     this.musicVolumeSlider.addEventListener("input", () => {
       game.audio.setMusicVolume(Number(this.musicVolumeSlider.value) / 100);
       this.updateSettingsLabels();
     });
     this.sfxVolumeSlider.addEventListener("input", () => {
       game.audio.setSfxVolume(Number(this.sfxVolumeSlider.value) / 100);
+      this.updateSettingsLabels();
+    });
+    this.touchControlsModeSelect.addEventListener("change", () => {
+      game.setTouchControlsMode(this.touchControlsModeSelect.value);
       this.updateSettingsLabels();
     });
     this.updateMenu();
@@ -1811,6 +2136,7 @@ class UIManager {
   syncSettingsControls() {
     this.musicVolumeSlider.value = Math.round(this.game.audio.musicVolume * 100);
     this.sfxVolumeSlider.value = Math.round(this.game.audio.sfxVolume * 100);
+    this.touchControlsModeSelect.value = this.game.touchControlsMode;
     this.updateSettingsLabels();
   }
 
@@ -1823,6 +2149,7 @@ class UIManager {
     this.disclaimerOverlay.classList.add("hidden");
     this.menuOverlay.classList.remove("hidden");
     this.startGuideOverlay.classList.add("hidden");
+    this.loadingOverlay.classList.add("hidden");
     this.controlsOverlay.classList.add("hidden");
     this.settingsOverlay.classList.add("hidden");
     this.pauseOverlay.classList.add("hidden");
@@ -1835,6 +2162,7 @@ class UIManager {
     this.disclaimerOverlay.classList.add("hidden");
     this.menuOverlay.classList.add("hidden");
     this.startGuideOverlay.classList.remove("hidden");
+    this.loadingOverlay.classList.add("hidden");
     this.controlsOverlay.classList.add("hidden");
     this.settingsOverlay.classList.add("hidden");
     this.pauseOverlay.classList.add("hidden");
@@ -1845,6 +2173,7 @@ class UIManager {
     this.disclaimerOverlay.classList.add("hidden");
     this.menuOverlay.classList.add("hidden");
     this.startGuideOverlay.classList.add("hidden");
+    this.loadingOverlay.classList.add("hidden");
     this.controlsOverlay.classList.add("hidden");
     this.settingsOverlay.classList.add("hidden");
     this.pauseOverlay.classList.add("hidden");
@@ -1855,6 +2184,26 @@ class UIManager {
     this.menuOverlay.classList.add("hidden");
     this.settingsOverlay.classList.add("hidden");
     this.controlsOverlay.classList.remove("hidden");
+  }
+
+  showLoading(levelLabel = "") {
+    this.disclaimerOverlay.classList.add("hidden");
+    this.menuOverlay.classList.add("hidden");
+    this.startGuideOverlay.classList.add("hidden");
+    this.controlsOverlay.classList.add("hidden");
+    this.settingsOverlay.classList.add("hidden");
+    this.pauseOverlay.classList.add("hidden");
+    this.resultOverlay.classList.add("hidden");
+    this.loadingTitle.textContent = levelLabel ? `Ładowanie ${levelLabel}` : "Ładowanie poziomu";
+    this.loadingDetails.textContent = "Przygotowywanie assetów...";
+    this.loadingBarFill.style.width = "0%";
+    this.loadingOverlay.classList.remove("hidden");
+  }
+
+  updateLoading(progress, done, total) {
+    const pct = Math.round(clamp(progress, 0, 1) * 100);
+    this.loadingBarFill.style.width = `${pct}%`;
+    this.loadingDetails.textContent = total ? `Assety poziomu: ${done}/${total}` : "Gotowe.";
   }
 
   showSettings() {
@@ -1878,17 +2227,18 @@ class UIManager {
   render(ctx) {
     const game = this.game;
     const kcal = game.hunger.value;
-    const barW = 238;
-    const barH = 18;
-    const x = 22;
-    const y = 26;
+    const mobileHud = game.isTouchHud();
+    const barW = mobileHud ? Math.min(188, Math.max(150, game.canvas.width * 0.42)) : 300;
+    const barH = mobileHud ? 22 : 26;
+    const x = mobileHud ? 14 : 24;
+    const y = mobileHud ? 27 : 32;
     const ratio = kcal / CONFIG.hunger.max;
     const lowPulse = ratio < 0.25 ? 0.7 + Math.sin(game.time * 12) * 0.3 : 1;
     const kcalColor = ratio > 0.6 ? "#5fd068" : ratio > 0.3 ? "#ffd166" : `rgba(239, 71, 111, ${lowPulse})`;
 
     ctx.save();
     ctx.fillStyle = "rgba(15, 18, 22, 0.66)";
-    ctx.fillRect(0, 0, game.canvas.width, 64);
+    ctx.fillRect(0, 0, game.canvas.width, mobileHud ? 70 : 82);
     ctx.fillStyle = "#f4f0df";
     ctx.fillStyle = "#2e323a";
     ctx.fillRect(x, y - 15, barW, barH);
@@ -1897,22 +2247,53 @@ class UIManager {
     ctx.strokeStyle = "#f4f0df";
     ctx.strokeRect(x, y - 15, barW, barH);
     ctx.fillStyle = "#201900";
-    ctx.font = "800 11px Segoe UI";
+    ctx.font = canvasFont(800, mobileHud ? 17 : 21);
     ctx.textAlign = "center";
-    ctx.fillText(`${Math.ceil(kcal)} kcal`, x + barW / 2, y - 2);
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${Math.ceil(kcal)} kcal`, x + barW / 2, y - 15 + barH / 2 + 1);
+    ctx.textBaseline = "alphabetic";
 
     ctx.fillStyle = "#f4f0df";
     ctx.textAlign = "left";
-    ctx.font = "700 14px Segoe UI";
-    ctx.fillText(`Życia: ${game.player.lives}`, 380, y);
-    ctx.fillText(`Czas: ${formatTime(game.timer.time)}`, 470, y);
-    ctx.fillText(`${game.currentLevel.label}`, 610, y);
-    ctx.fillText(`Zjedzone: ${game.consumedKcal} kcal`, 675, y);
-    ctx.font = "700 12px Segoe UI";
-    ctx.fillText(game.currentLevel.world, 22, 50);
-    ctx.fillText(`Best: ${formatTime(SaveSystem.getBestTime(false))}`, 380, 50);
-    ctx.fillText(`Pyszności: ${game.collectedCount}`, 555, 50);
+    if (mobileHud) {
+      const secondY = 56;
+      this.drawLifeIcon(ctx, x, secondY - 15, 20);
+      ctx.font = canvasFont(800, 14);
+      ctx.fillText(`x ${game.player.lives}`, x + 26, secondY);
+      ctx.fillText(`POZIOM: ${game.currentLevel.label}`, x + 82, secondY);
+      const eatenX = Math.min(game.canvas.width - 166, x + 214);
+      ctx.fillText(`ZJEDZONE: ${game.consumedKcal} kcal`, eatenX, secondY);
+    } else {
+      ctx.font = canvasFont(700, 20);
+      this.drawLifeIcon(ctx, 360, y - 21, 24);
+      ctx.fillText(`x ${game.player.lives}`, 392, y);
+      ctx.fillText(`Czas: ${formatTime(game.timer.time)}`, 470, y);
+      ctx.fillText(`${game.currentLevel.label}`, 610, y);
+      ctx.fillText(`Zjedzone: ${game.consumedKcal} kcal`, 690, y);
+      ctx.font = canvasFont(700, 17);
+      ctx.fillText(game.currentLevel.world, 24, 66);
+      ctx.fillText(`Best: ${formatTime(SaveSystem.getBestTime(false))}`, 360, 66);
+      ctx.fillText(`Pyszności: ${game.collectedCount}`, 535, 66);
+    }
     ctx.restore();
+  }
+
+  drawLifeIcon(ctx, x, y, size) {
+    const heart = UI_IMAGES.get("live");
+    if (heart) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(heart, x, y, size, size);
+      ctx.restore();
+      return;
+    }
+    ctx.fillStyle = "#ef476f";
+    ctx.beginPath();
+    ctx.moveTo(x + size / 2, y + size);
+    ctx.bezierCurveTo(x - size * 0.2, y + size * 0.55, x, y, x + size * 0.38, y + size * 0.25);
+    ctx.bezierCurveTo(x + size * 0.5, y, x + size * 0.92, y, x + size, y + size * 0.25);
+    ctx.bezierCurveTo(x + size * 1.15, y + size * 0.62, x + size * 0.62, y + size * 0.85, x + size / 2, y + size);
+    ctx.fill();
   }
 }
 
@@ -2031,12 +2412,15 @@ class GameManager {
     this.input = new InputManager();
     this.sprites = new SpriteLoader();
     this.camera = new CameraSystem(this.canvas);
+    this.levelAssets = new LevelAssetManager();
     this.player = new PlayerController(this);
     this.hunger = new HungerSystem(this);
     this.timer = new SpeedrunTimer();
     this.audio = new AudioManager();
     this.speedrunMode = false;
+    this.touchControlsMode = this.loadTouchControlsMode();
     this.ui = new UIManager(this);
+    this.mobileControls = new MobileControls(this);
     this.levelGenerator = new ProceduralLevelGenerator();
     this.levelIndex = 0;
     this.levelNumber = 1;
@@ -2062,10 +2446,14 @@ class GameManager {
     this.bindControls();
     this.resize();
     window.addEventListener("resize", () => this.resize());
+    const coarsePointerQuery = window.matchMedia ? window.matchMedia("(pointer: coarse)") : null;
+    coarsePointerQuery?.addEventListener?.("change", () => this.updateTouchControlsVisibility());
 
     this.sprites.load();
     loadCollectibleImages();
     loadEnemyImages();
+    loadUiImages();
+    document.fonts?.load(`12px ${GAME_FONT}`).catch(() => {});
     requestAnimationFrame((now) => this.loop(now));
   }
 
@@ -2086,16 +2474,54 @@ class GameManager {
     const box = this.canvas.getBoundingClientRect();
     this.canvas.width = Math.max(320, Math.floor(box.width));
     this.canvas.height = Math.max(320, Math.floor(box.height));
+    this.updateTouchControlsVisibility();
   }
 
-  startGame() {
+  loadTouchControlsMode() {
+    try {
+      const raw = localStorage.getItem("odysejaWolbromska.touchControlsMode");
+      return ["auto", "on", "off"].includes(raw) ? raw : "auto";
+    } catch {
+      return "auto";
+    }
+  }
+
+  setTouchControlsMode(mode) {
+    this.touchControlsMode = ["auto", "on", "off"].includes(mode) ? mode : "auto";
+    try {
+      localStorage.setItem("odysejaWolbromska.touchControlsMode", this.touchControlsMode);
+    } catch {
+      // Local file storage can be unavailable; the setting still applies this session.
+    }
+    this.updateTouchControlsVisibility();
+  }
+
+  shouldShowTouchControls() {
+    if (this.touchControlsMode === "on") return true;
+    if (this.touchControlsMode === "off") return false;
+    return detectTouchDevice();
+  }
+
+  updateTouchControlsVisibility() {
+    const stateAllowsControls = this.state === "playing";
+    this.mobileControls?.setVisible(stateAllowsControls && this.shouldShowTouchControls());
+  }
+
+  isTouchHud() {
+    return this.canvas.width <= 700 || (this.shouldShowTouchControls() && detectTouchDevice());
+  }
+
+  async startGame() {
     this.levelIndex = 0;
     this.levelNumber = 1;
     this.currentLevel = CAMPAIGN_LEVELS[this.levelIndex];
     this.collectedCount = 0;
     this.consumedKcal = 0;
     this.nextExtraLifeKcal = 15000;
+    this.state = "loading";
+    this.ui.showLoading(`${this.currentLevel.world} ${this.currentLevel.label}`);
     this.generateLevel();
+    await this.loadCurrentLevelAssets();
     this.player.reset();
     this.hunger.reset();
     this.timer.reset();
@@ -2125,10 +2551,14 @@ class GameManager {
     this.player.checkpoint = { x: this.player.spawnX, y: this.player.spawnY };
   }
 
-  nextLevel() {
+  async nextLevel() {
     this.levelIndex = Math.min(this.levelIndex + 1, CAMPAIGN_LEVELS.length - 1);
     this.collectedCount = 0;
+    this.currentLevel = CAMPAIGN_LEVELS[this.levelIndex] || CAMPAIGN_LEVELS[CAMPAIGN_LEVELS.length - 1];
+    this.state = "loading";
+    this.ui.showLoading(`${this.currentLevel.world} ${this.currentLevel.label}`);
     this.generateLevel();
+    await this.loadCurrentLevelAssets();
     const lives = this.player.lives;
     this.player.reset();
     this.player.lives = lives;
@@ -2152,11 +2582,14 @@ class GameManager {
     this.nextLevel();
   }
 
-  restartLevel() {
+  async restartLevel() {
     this.collectedCount = 0;
     this.consumedKcal = 0;
     this.nextExtraLifeKcal = 15000;
+    this.state = "loading";
+    this.ui.showLoading(`${this.currentLevel.world} ${this.currentLevel.label}`);
     this.generateLevel();
+    await this.loadCurrentLevelAssets();
     this.player.reset();
     this.hunger.reset();
     this.timer.reset();
@@ -2167,6 +2600,12 @@ class GameManager {
     this.state = "playing";
     this.ui.hideAll();
     this.audio.playMusic();
+  }
+
+  async loadCurrentLevelAssets() {
+    await this.levelAssets.loadForLevel(this.level, (progress, done, total) => {
+      this.ui.updateLoading(progress, done, total);
+    });
   }
 
   returnToMenu() {
@@ -2184,6 +2623,7 @@ class GameManager {
     this.timer.stop();
     this.audio.pauseMusic();
     this.ui.showPause(true);
+    this.updateTouchControlsVisibility();
   }
 
   resume() {
@@ -2191,6 +2631,7 @@ class GameManager {
     this.timer.start();
     this.audio.playMusic();
     this.ui.showPause(false);
+    this.updateTouchControlsVisibility();
   }
 
   playerDie(fromPit) {
@@ -2214,7 +2655,7 @@ class GameManager {
     this.sceneFreezeTime = this.time;
     this.ui.showResult(
       "Game Over",
-      `NIE UDAŁO CI SIĘ DOTRZEĆ DO KRAKOWA.<br>Czas: ${formatTime(this.timer.time)}<br>Skonsumowane: ${this.consumedKcal} kcal<br>Pyszności: ${this.collectedCount}`,
+      `NIE UDAŁO CI SIĘ DOTRZEĆ DO DUBAJU.<br>Czas: ${formatTime(this.timer.time)}<br>Skonsumowane: ${this.consumedKcal} kcal<br>Pyszności: ${this.collectedCount}`,
       false
     );
   }
@@ -2258,6 +2699,7 @@ class GameManager {
 
     if (this.state === "playing") this.update(this.dt);
     this.dimAlpha = lerp(this.dimAlpha, this.dimTarget, 1 - Math.pow(0.0005, this.dt));
+    this.updateTouchControlsVisibility();
     this.render();
     this.input.update(this.dt);
     requestAnimationFrame((next) => this.loop(next));
@@ -2383,40 +2825,45 @@ class GameManager {
       ctx.fillRect(0, 118, w, 8);
       ctx.fillRect(0, 372, w, 10);
       ctx.fillStyle = "#ffd166";
-      ctx.font = "900 34px Segoe UI";
+      ctx.font = canvasFont(900, 24);
       ctx.textAlign = "center";
       ctx.fillText("TEST BOSS FIGHT", w / 2, 178);
-      ctx.font = "800 14px Segoe UI";
+      ctx.font = canvasFont(800, 9);
       ctx.fillText("STOMP THE BOSS - SURVIVE THE TEST ATTACKS", w / 2, 204);
       return;
     }
 
+    const hasSuburbBackdrops = theme === "suburbs" && this.level && this.level.backdrops && this.level.backdrops.length;
+    if (hasSuburbBackdrops) this.renderBackdropLayer(ctx);
+
     ctx.fillStyle = palette.far;
     const farStep = theme === "suburbs" ? 230 : 260;
-    for (let x = -((cam * 0.18) % farStep); x < w + farStep; x += farStep) {
-      const bx = Math.round(x);
-      if (theme === "suburbs") {
-        ctx.fillRect(bx + 18, 285, 132, 82);
-        ctx.beginPath();
-        ctx.moveTo(bx + 4, 285);
-        ctx.lineTo(bx + 84, 224);
-        ctx.lineTo(bx + 164, 285);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = "rgba(255, 235, 171, 0.38)";
-        ctx.fillRect(bx + 52, 310, 20, 22);
-        ctx.fillRect(bx + 102, 310, 20, 22);
-        ctx.fillStyle = palette.far;
-      } else {
-        const blockH = theme === "market" ? 190 : 260;
-        ctx.fillRect(bx, 118 + (260 - blockH), 145, blockH);
-        ctx.fillStyle = "rgba(230, 222, 163, 0.45)";
-        for (let row = 0; row < 5; row += 1) {
-          for (let col = 0; col < 3; col += 1) {
-            ctx.fillRect(bx + 20 + col * 36, 146 + row * 38 + (260 - blockH), 18, 18);
+    if (!hasSuburbBackdrops) {
+      for (let x = -((cam * 0.18) % farStep); x < w + farStep; x += farStep) {
+        const bx = Math.round(x);
+        if (theme === "suburbs") {
+          ctx.fillRect(bx + 18, 285, 132, 82);
+          ctx.beginPath();
+          ctx.moveTo(bx + 4, 285);
+          ctx.lineTo(bx + 84, 224);
+          ctx.lineTo(bx + 164, 285);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = "rgba(255, 235, 171, 0.38)";
+          ctx.fillRect(bx + 52, 310, 20, 22);
+          ctx.fillRect(bx + 102, 310, 20, 22);
+          ctx.fillStyle = palette.far;
+        } else {
+          const blockH = theme === "market" ? 190 : 260;
+          ctx.fillRect(bx, 118 + (260 - blockH), 145, blockH);
+          ctx.fillStyle = "rgba(230, 222, 163, 0.45)";
+          for (let row = 0; row < 5; row += 1) {
+            for (let col = 0; col < 3; col += 1) {
+              ctx.fillRect(bx + 20 + col * 36, 146 + row * 38 + (260 - blockH), 18, 18);
+            }
           }
+          ctx.fillStyle = palette.far;
         }
-        ctx.fillStyle = palette.far;
       }
     }
 
@@ -2431,6 +2878,35 @@ class GameManager {
     }
   }
 
+  renderBackdropLayer(ctx) {
+    for (const d of this.level.backdrops || []) {
+      const parallax = d.parallax ?? 0.26;
+      const x = Math.round(d.x - this.camera.x * parallax);
+      if (x + d.w < -120 || x > this.canvas.width + 120) continue;
+      const y = Math.round(d.y - this.camera.y * 0.08);
+      const assetImage = d.assetPath ? this.levelAssets.getImage(d.assetPath) : null;
+      ctx.save();
+      ctx.globalAlpha = d.alpha ?? 0.68;
+      if (assetImage) {
+        this.drawAssetInBox(ctx, assetImage, x, y, d.w, d.h);
+      } else {
+        ctx.fillStyle = d.type === "backdrop-tree" ? "#58745a" : "#889889";
+        ctx.fillRect(x, y, d.w, d.h);
+      }
+      ctx.restore();
+    }
+  }
+
+  drawAssetInBox(ctx, img, x, y, w, h) {
+    ctx.imageSmoothingEnabled = false;
+    const scale = Math.min(w / img.width, h / img.height);
+    const drawW = img.width * scale;
+    const drawH = img.height * scale;
+    const drawX = x + (w - drawW) / 2;
+    const drawY = y + h - drawH;
+    ctx.drawImage(img, drawX, drawY, drawW, drawH);
+  }
+
   renderWorld(ctx) {
     this.renderDetails(ctx);
     for (const p of this.level.platforms) this.renderPlatform(ctx, p);
@@ -2440,20 +2916,32 @@ class GameManager {
 
   renderDetails(ctx) {
     for (const d of this.level.details) {
-      const parallax = d.type === "tutorial" ? 1 : 0.82;
+      const parallax = d.type === "tutorial" ? 1 : d.parallax ?? 0.84;
       const x = Math.round(d.x - this.camera.x * parallax);
       if (x + d.w < -80 || x > this.canvas.width + 80) continue;
       const y = Math.round(d.y - this.camera.y);
       if (d.type === "tutorial") {
         ctx.save();
         ctx.fillStyle = "rgba(15, 18, 22, 0.76)";
-        ctx.fillRect(x - 10, y - 20, d.w, d.h);
+        ctx.fillRect(x, y, d.w, d.h);
         ctx.strokeStyle = "#ffd166";
-        ctx.strokeRect(x - 10, y - 20, d.w, d.h);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, d.w, d.h);
         ctx.fillStyle = "#ffd166";
-        ctx.font = "800 16px Segoe UI";
+        ctx.font = canvasFont(800, 22);
         ctx.textAlign = "center";
-        ctx.fillText(d.text, x - 10 + d.w / 2, y);
+        ctx.textBaseline = "middle";
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = "#201900";
+        ctx.strokeText(d.text, x + d.w / 2, y + d.h / 2 + 1);
+        ctx.fillText(d.text, x + d.w / 2, y + d.h / 2 + 1);
+        ctx.restore();
+        continue;
+      }
+      const assetImage = d.assetPath ? this.levelAssets.getImage(d.assetPath) : null;
+      if (assetImage) {
+        ctx.save();
+        this.drawAssetInBox(ctx, assetImage, x, y, d.w, d.h);
         ctx.restore();
         continue;
       }
@@ -2501,7 +2989,7 @@ class GameManager {
       ctx.fillStyle = d.type === "shop" ? "rgba(255,255,255,0)" : "#f7d774";
       if (d.type !== "shop") ctx.fillRect(x + 8, y + d.h - 22, d.w - 16, 16);
       ctx.fillStyle = "#26200c";
-      ctx.font = "700 9px Segoe UI";
+      ctx.font = canvasFont(700, 7);
       ctx.textAlign = "center";
       ctx.fillText(d.sign, x + d.w / 2, d.type === "shop" ? y + 24 : y + d.h - 10);
     }
@@ -2566,14 +3054,14 @@ class GameManager {
     ctx.closePath();
     ctx.fill();
     ctx.fillStyle = "#251900";
-    ctx.font = "800 13px Segoe UI";
+    ctx.font = canvasFont(800, 10);
     ctx.fillText("META", x + 21, y + 33);
   }
 
   renderFloatingTexts(ctx) {
     ctx.save();
     ctx.textAlign = "center";
-    ctx.font = "800 15px Segoe UI";
+    ctx.font = canvasFont(800, 11);
     for (const text of this.floatingTexts) {
       const x = Math.round(text.x - this.camera.x);
       const y = Math.round(text.y - this.camera.y);
