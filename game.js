@@ -103,8 +103,8 @@ const PLAYER_SKINS = {
       sprint: [
         "assets/player/skins/kloda-purple/walk1.png",
         "assets/player/skins/kloda-purple/walk2.png",
-        "assets/player/skins/kloda-purple/walk3.png",
-        "assets/player/skins/kloda-purple/walk2.png"
+        "assets/player/skins/kloda-purple/static.png",
+        "assets/player/skins/kloda-purple/walk3.png"
       ]
     }
   },
@@ -1497,7 +1497,7 @@ class BossFlyingTrackerEnemy extends EnemyBase {
       color: "#7b2f84",
       patrol: 260
     });
-    this.name = "Burmistrz Paragonu";
+    this.name = "TEST BOSS";
     this.baseY = y;
     this.dashCooldown = 2.2;
     this.dashTime = 0;
@@ -2065,7 +2065,7 @@ class ProceduralLevelGenerator {
     const ground = { x: 0, y: CONFIG.groundY, w: width, h: 92, kind: "ground" };
     const platforms = [ground];
     const details = [
-      { x: 220, y: CONFIG.groundY - 188, w: 360, h: 54, type: "tutorial", text: "DOGON TWINKA! >>>" }
+      { x: 220, y: CONFIG.groundY - 188, w: 360, h: 54, type: "tutorial", text: "DOGOŃ TWINKA! >>>" }
     ];
     const backdrops = [];
     const collectibles = [];
