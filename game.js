@@ -115,9 +115,9 @@ const PLAYER_SKINS = {
       walk: [
         "assets/player/skins/tss-blue/static.png",
         "assets/player/skins/tss-blue/walk.png",
-        "assets/player/skins/tss-blue/walk1.png",
         "assets/player/skins/tss-blue/static.png",
-        "assets/player/skins/tss-blue/walk.png"
+        "assets/player/skins/tss-blue/static.png",
+        "assets/player/skins/tss-blue/walk1.png"
       ],
       jump: ["assets/player/skins/tss-blue/jump1.png"],
       fall: ["assets/player/skins/tss-blue/fall.png"],
