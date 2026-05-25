@@ -41,7 +41,7 @@ function drawNameTag(ctx, text, x, y, size = 18) {
   const boxW = Math.ceil(metrics.width + padX * 2);
   const boxH = Math.ceil(size + padY * 2);
   const boxX = Math.round(x - boxW / 2);
-  const boxY = Math.round(y - boxH / 2);
+  const boxY = Math.round(y - boxH);
   ctx.fillStyle = "rgba(18, 22, 28, 0.78)";
   ctx.strokeStyle = "#fff7dd";
   ctx.lineWidth = 1.5;
@@ -52,8 +52,8 @@ function drawNameTag(ctx, text, x, y, size = 18) {
   ctx.lineWidth = 4;
   ctx.strokeStyle = "#201900";
   ctx.fillStyle = "#fff7dd";
-  ctx.strokeText(text, x, y + 1);
-  ctx.fillText(text, x, y + 1);
+  ctx.strokeText(text, x, boxY + boxH / 2 + 1);
+  ctx.fillText(text, x, boxY + boxH / 2 + 1);
   ctx.restore();
 }
 
@@ -484,6 +484,7 @@ class CameraSystem {
     const target = player.x + lookAhead - this.canvas.width * 0.42;
     const maxX = Math.max(0, levelWidth - this.canvas.width);
     this.x = clamp(lerp(this.x, target, 1 - Math.pow(0.001, dt)), 0, maxX);
+    this.y = 0;
   }
 }
 
@@ -1056,7 +1057,7 @@ class EnemyBase {
     ctx.stroke();
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.fillRect(x + 6, y + this.h - 8, this.w - 12, 4);
-    drawNameTag(ctx, this.name, x + this.w / 2, y - 10, 18);
+    drawNameTag(ctx, this.name, x + this.w / 2, y - 14, 18);
     if (this.maxHp > 1) {
       ctx.fillStyle = "#111";
       ctx.fillRect(x, y + this.h + 4, this.w, 5);
@@ -1260,7 +1261,7 @@ class FlyerEnemy extends EnemyBase {
       ctx,
       this.name,
       Math.round(this.x - camera.x + this.w / 2),
-      Math.round(this.y - camera.y - 12),
+      Math.round(this.y - camera.y - 16),
       17
     );
   }
@@ -1628,7 +1629,7 @@ class TestArenaBossEnemy extends EnemyBase {
     ctx.fillRect(x + this.w - 28, y + 20, 14, 12);
     ctx.fillStyle = "#ffd166";
     ctx.fillRect(x + 17, y + 52, this.w - 34, 8);
-    drawNameTag(ctx, this.name, x + this.w / 2, y - 12, 19);
+    drawNameTag(ctx, this.name, x + this.w / 2, y - 18, 19);
     ctx.fillStyle = "#111";
     ctx.fillRect(x, y + this.h + 5, this.w, 7);
     ctx.fillStyle = "#ffd166";
@@ -1699,7 +1700,10 @@ class ProceduralLevelGenerator {
       const maxFairGap = 168 + difficulty * 42;
       const gap = shouldForceSprintGap ? this.rand(222, 238) : hasGap ? this.rand(118, maxFairGap) : this.rand(6, 28);
       const width = this.rand(230, 500 - difficulty * 95);
-      const nextY = clamp(y + this.rand(-42 - difficulty * 16, 46), 318, CONFIG.groundY);
+      const minPlatformY = 246 + difficulty * 18;
+      const verticalRise = hasGap ? 62 + difficulty * 8 : 82 + difficulty * 10;
+      const verticalDrop = 72 + difficulty * 12;
+      const nextY = clamp(y + this.rand(-verticalRise, verticalDrop), minPlatformY, CONFIG.groundY);
       const previousEnd = x;
       x += gap;
 
@@ -1744,7 +1748,10 @@ class ProceduralLevelGenerator {
         platforms.push(bridge);
       }
 
-      this.decoratePlatform(platform, collectibles, enemies, levelNumber, difficulty, speedrunMode);
+      this.decoratePlatform(platform, collectibles, enemies, levelNumber, difficulty, speedrunMode, config);
+      if (!hasGap && farFromFinish && platform.w >= 390 && this.random() < 0.22 + difficulty * 0.1) {
+        this.addUpperPlatform(platforms, collectibles, platform, speedrunMode, difficulty);
+      }
 
       if (x > checkpoints.length * 1300 + 1050) {
         checkpoints.push({ x: platform.x + 40, y: platform.y - CONFIG.player.drawHeight, active: false });
@@ -1823,22 +1830,50 @@ class ProceduralLevelGenerator {
     };
   }
 
-  decoratePlatform(platform, collectibles, enemies, levelNumber, difficulty, speedrunMode) {
+  decoratePlatform(platform, collectibles, enemies, levelNumber, difficulty, speedrunMode, config = null) {
     const safeStart = platform.x < 680;
     this.addScatteredCollectibles(platform, collectibles, speedrunMode, difficulty);
+    const enemyLimit = config && config.label === "1-1" ? 3 : Infinity;
+    const canSpawnEnemy = enemies.length < enemyLimit;
 
-    if (!safeStart && this.random() < 0.44 + difficulty * 0.5) {
+    if (canSpawnEnemy && !safeStart && this.random() < 0.44 + difficulty * 0.5) {
       const enemyX = platform.x + this.rand(35, Math.max(55, platform.w - 80));
       const groundY = platform.y - 44;
       enemies.push(this.createEnemy(enemyX, groundY, levelNumber, difficulty));
     }
 
-    if (!safeStart && difficulty > 0.18 && this.random() < 0.16 + difficulty * 0.22) {
+    if (enemies.length < enemyLimit && !safeStart && difficulty > 0.18 && this.random() < 0.16 + difficulty * 0.22) {
       enemies.push(new FlyerEnemy(platform.x + platform.w * 0.5, platform.y - this.rand(120, 190)));
     }
 
-    if (!safeStart && difficulty > 0.35 && this.random() < 0.1 + difficulty * 0.18) {
+    if (enemies.length < enemyLimit && !safeStart && difficulty > 0.35 && this.random() < 0.1 + difficulty * 0.18) {
       enemies.push(new ChargerEnemy(platform.x + this.rand(60, Math.max(70, platform.w - 80)), platform.y - 46));
+    }
+  }
+
+  addUpperPlatform(platforms, collectibles, basePlatform, speedrunMode, difficulty) {
+    const margin = 116;
+    const w = this.rand(96, 158);
+    const maxStart = Math.max(margin + 1, basePlatform.w - margin - w);
+    const x = basePlatform.x + this.rand(margin, maxStart);
+    const lift = this.rand(118, 168 + difficulty * 18);
+    const y = clamp(basePlatform.y - lift, 166, basePlatform.y - 112);
+    const upper = {
+      x: Math.round(x),
+      y: Math.round(y),
+      w: Math.round(w),
+      h: 18,
+      kind: "floating"
+    };
+    platforms.push(upper);
+
+    if (this.random() < (speedrunMode ? 0.34 : 0.58)) {
+      this.addSingleCollectible(
+        collectibles,
+        upper.x + upper.w / 2 - 18,
+        upper.y - this.rand(54, 72),
+        speedrunMode
+      );
     }
   }
 
@@ -1923,36 +1958,65 @@ class ProceduralLevelGenerator {
 
   addBackdropDetails(backdrops, length, theme = "center") {
     if (theme !== "suburbs") return;
-    const houseBaseline = CONFIG.groundY - 42;
-    const treeBaseline = CONFIG.groundY - 35;
+    const houseBaseline = CONFIG.groundY - 14;
+    const treeBaseline = CONFIG.groundY - 8;
     for (let x = -260; x < length + 640; x += this.rand(390, 560)) {
       if (this.random() < 0.82) {
         const h = this.rand(285, 395);
         const w = this.rand(430, 650);
+        const houseX = Math.round(x + this.rand(-34, 34));
+        const parallax = this.rand(0.22, 0.32);
+        const treePositions = [];
+        if (this.random() < 0.62) treePositions.push("behind-left");
+        if (this.random() < 0.5) treePositions.push("front-right");
+        if (!treePositions.length && this.random() < 0.3) treePositions.push("behind-right");
+
+        for (const position of treePositions.filter((position) => position.startsWith("behind"))) {
+          const treeH = this.rand(140, 230);
+          const treeW = treeH * this.rand(0.5, 0.78);
+          const edgeX = position === "behind-left"
+            ? houseX - treeW * this.rand(0.18, 0.42)
+            : houseX + w - treeW * this.rand(0.58, 0.82);
+          backdrops.push({
+            x: Math.round(edgeX),
+            y: Math.round(treeBaseline - treeH),
+            w: Math.round(treeW),
+            h: Math.round(treeH),
+            type: "backdrop-tree",
+            assetPath: this.pickAsset(BUILDING_ASSETS.foliage.trees),
+            parallax,
+            alpha: 0.5
+          });
+        }
+
         backdrops.push({
-          x: Math.round(x + this.rand(-34, 34)),
+          x: houseX,
           y: Math.round(houseBaseline - h),
           w: Math.round(w),
           h: Math.round(h),
           type: "backdrop-house",
           assetPath: this.pickAsset(BUILDING_ASSETS.suburbs.house),
-          parallax: this.rand(0.22, 0.32),
+          parallax,
           alpha: 0.7
         });
-      }
-      if (this.random() < 0.42) {
-        const h = this.rand(135, 220);
-        const w = h * this.rand(0.58, 0.86);
-        backdrops.push({
-          x: Math.round(x + this.rand(155, 270)),
-          y: Math.round(treeBaseline - h),
-          w: Math.round(w),
-          h: Math.round(h),
-          type: "backdrop-tree",
-          assetPath: this.pickAsset(BUILDING_ASSETS.foliage.trees),
-          parallax: this.rand(0.18, 0.28),
-          alpha: 0.62
-        });
+
+        for (const position of treePositions.filter((position) => position.startsWith("front"))) {
+          const treeH = this.rand(120, 195);
+          const treeW = treeH * this.rand(0.5, 0.76);
+          const edgeX = position === "front-right"
+            ? houseX + w - treeW * this.rand(0.35, 0.68)
+            : houseX - treeW * this.rand(0.08, 0.25);
+          backdrops.push({
+            x: Math.round(edgeX),
+            y: Math.round(treeBaseline - treeH),
+            w: Math.round(treeW),
+            h: Math.round(treeH),
+            type: "backdrop-tree",
+            assetPath: this.pickAsset(BUILDING_ASSETS.foliage.trees),
+            parallax,
+            alpha: 0.68
+          });
+        }
       }
     }
   }
@@ -2540,6 +2604,7 @@ class GameManager {
     this.levelGenerator = new ProceduralLevelGenerator(Date.now() + this.levelNumber * 99991);
     this.level = this.levelGenerator.generate(this.levelNumber, this.speedrunMode, this.currentLevel);
     this.camera.x = 0;
+    this.camera.y = 0;
     this.floatingTexts = [];
     this.projectiles = [];
     this.finishWarningCooldown = 0;
@@ -2708,7 +2773,10 @@ class GameManager {
   update(dt) {
     this.timer.update(dt);
     this.player.update(dt);
-    if (this.level.fixedCamera) this.camera.x = 0;
+    if (this.level.fixedCamera) {
+      this.camera.x = 0;
+      this.camera.y = 0;
+    }
     else this.camera.update(dt, this.player, this.level.width);
 
     for (const item of this.level.collectibles) item.update(dt, this);
@@ -2876,6 +2944,48 @@ class GameManager {
       ctx.fillRect(Math.round(x + 91), 352, 72, 16);
       ctx.fillStyle = palette.near;
     }
+
+    this.renderParallaxRoad(ctx, theme);
+  }
+
+  renderParallaxRoad(ctx, theme) {
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const groundY = Math.round(CONFIG.groundY - this.camera.y);
+    const scroll = this.camera.x * 0.58;
+    const slabW = theme === "suburbs" ? 86 : 74;
+    const slabOffset = -((scroll) % slabW);
+    const sidewalkY = groundY - 27;
+    const sidewalkH = 34;
+    const roadY = groundY + 18;
+
+    ctx.save();
+
+    const sidewalkBase = theme === "market" ? "#b7aa94" : theme === "blocks" ? "#9ea6a4" : "#a7b8ad";
+    const sidewalkTop = theme === "market" ? "#d3c3a4" : "#c4d2c9";
+    ctx.fillStyle = sidewalkBase;
+    ctx.fillRect(0, sidewalkY, w, sidewalkH);
+    ctx.fillStyle = sidewalkTop;
+    ctx.fillRect(0, sidewalkY, w, 5);
+    ctx.strokeStyle = "rgba(44, 55, 51, 0.38)";
+    ctx.lineWidth = 1.5;
+    for (let x = slabOffset - slabW; x < w + slabW; x += slabW) {
+      const sx = Math.round(x);
+      ctx.beginPath();
+      ctx.moveTo(sx, sidewalkY + 5);
+      ctx.lineTo(sx, sidewalkY + sidewalkH);
+      ctx.stroke();
+    }
+
+    const roadGradient = ctx.createLinearGradient(0, roadY, 0, h);
+    roadGradient.addColorStop(0, "rgba(34, 36, 34, 0.78)");
+    roadGradient.addColorStop(1, "rgba(15, 15, 16, 0.86)");
+    ctx.fillStyle = roadGradient;
+    ctx.fillRect(0, roadY, w, Math.max(0, h - roadY));
+    ctx.fillStyle = "rgba(185, 194, 179, 0.25)";
+    ctx.fillRect(0, roadY, w, 3);
+
+    ctx.restore();
   }
 
   renderBackdropLayer(ctx) {
