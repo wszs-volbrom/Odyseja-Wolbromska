@@ -64,8 +64,12 @@ const CAMPAIGN_LEVELS = [
   { label: "2-1", world: "RYNEK WOLBROM", difficulty: 0.52, length: 7600, boss: false, theme: "market" },
   { label: "2-2", world: "RYNEK WOLBROM", difficulty: 0.7, length: 8400, boss: false, theme: "market" },
   { label: "2-3", world: "RYNEK WOLBROM", difficulty: 0.9, length: 7000, boss: true, theme: "market" },
-  { label: "2-4", world: "TEST BOSS FIGHT", difficulty: 1, length: 1280, boss: true, bossFight: true, fixedCamera: true, theme: "bossfight" }
+  { label: "2-4", world: "ZŁAP GEJA TWINKA", difficulty: 1, length: 999999, boss: false, twinkChase: true, theme: "center" }
 ];
+
+// ## Test fight for future
+// The old 2-4 TEST BOSS FIGHT prototype is intentionally preserved in generateBossArena().
+const FUTURE_TEST_FIGHT_LEVEL = { label: "2-4", world: "TEST BOSS FIGHT", difficulty: 1, length: 1280, boss: true, bossFight: true, fixedCamera: true, theme: "bossfight" };
 
 const THEME_PALETTES = {
   suburbs: { skyTop: "#b7c9c1", skyMid: "#91a99b", skyBottom: "#6f846f", far: "rgba(84, 105, 88, 0.42)", near: "rgba(80, 95, 72, 0.62)" },
@@ -124,6 +128,7 @@ const PLAYER_SKINS = {
       sprint: [
         "assets/player/skins/tss-blue/walk.png",
         "assets/player/skins/tss-blue/walk1.png",
+        "assets/player/skins/tss-blue/static.png",
         "assets/player/skins/tss-blue/walk.png"
       ]
     }
@@ -1799,6 +1804,74 @@ class TestArenaBossEnemy extends EnemyBase {
   }
 }
 
+class TwinkChaseTarget extends EnemyBase {
+  constructor(x, y) {
+    super(x, y, { name: "Gej Twink", hp: 1, damage: 0, w: 42, h: 70, vx: 230, color: "#ff8bd1", patrol: 99999 });
+    this.dir = 1;
+    this.jumpCooldown = 0.2;
+    this.panic = 0;
+  }
+
+  update(dt, game) {
+    const player = game.player;
+    const lead = this.x - player.x;
+    const close = lead < 300;
+    const tooFar = lead > 760;
+    const desiredSpeed = tooFar ? 155 : close ? 312 : 232;
+    this.panic = clamp(1 - lead / 580, 0, 1);
+    this.vx = lerp(this.vx, desiredSpeed, 1 - Math.pow(0.008, dt));
+
+    this.jumpCooldown -= dt;
+    if (this.onGround && this.jumpCooldown <= 0 && this.shouldJump(game)) {
+      this.vy = -CONFIG.player.jumpForce * (close ? 1.05 : 0.92);
+      this.onGround = false;
+      this.jumpCooldown = 0.45 + Math.random() * 0.22;
+    }
+
+    super.update(dt, game);
+
+    if (this.x + this.w > game.level.width - 140) this.x = game.level.width - 140 - this.w;
+  }
+
+  shouldJump(game) {
+    const probe = {
+      x: this.x + this.w,
+      y: this.y + 8,
+      w: 118 + this.panic * 40,
+      h: this.h - 8
+    };
+    return game.level.platforms.some((platform) => platform.kind === "chaseObstacle" && rectsOverlap(probe, platform));
+  }
+
+  handlePlayerCollision(game) {
+    if (this.dead) return;
+    if (!rectsOverlap(this.bounds, game.player.bounds)) return;
+    this.dead = true;
+    game.addFloatingText("ZŁAPANY!", this.x + this.w / 2, this.y - 24, "#ffd166");
+    game.completeLevel();
+  }
+
+  render(ctx, camera) {
+    if (this.dead) return;
+    const x = Math.round(this.x - camera.x);
+    const y = Math.round(this.y - camera.y);
+    ctx.save();
+    ctx.fillStyle = "#ff8bd1";
+    ctx.strokeStyle = "#2b1521";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(x, y, this.w, this.h, 7);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#f8e7f0";
+    ctx.fillRect(x + 9, y + 9, this.w - 18, 14);
+    ctx.fillStyle = "#5b2443";
+    ctx.fillRect(x + 10, y + this.h - 13, this.w - 20, 5);
+    drawNameTag(ctx, this.name, x + this.w / 2, y - 14, 18);
+    ctx.restore();
+  }
+}
+
 class ProceduralLevelGenerator {
   constructor(seed = Date.now()) {
     this.seed = seed >>> 0;
@@ -1826,6 +1899,7 @@ class ProceduralLevelGenerator {
   generate(levelNumber, speedrunMode, levelConfig = null) {
     const config = levelConfig || CAMPAIGN_LEVELS[Math.min(levelNumber - 1, CAMPAIGN_LEVELS.length - 1)];
     if (config && config.bossFight) return this.generateBossArena(levelNumber, speedrunMode, config);
+    if (config && config.twinkChase) return this.generateTwinkChase(levelNumber, speedrunMode, config);
     const difficulty = config ? config.difficulty : Math.min(1, (levelNumber - 1) / 7);
     const length = config ? config.length : 5600 + (levelNumber - 1) * 850;
     const platforms = [];
@@ -1983,6 +2057,93 @@ class ProceduralLevelGenerator {
       collectibleSpawnTimer: 2.4,
       spawn: { x: 92, y: CONFIG.groundY - CONFIG.player.drawHeight }
     };
+  }
+
+  generateTwinkChase(levelNumber, speedrunMode, config) {
+    const width = config.length || 999999;
+    const theme = config.theme || "center";
+    const ground = { x: 0, y: CONFIG.groundY, w: width, h: 92, kind: "ground" };
+    const platforms = [ground];
+    const details = [
+      { x: 220, y: CONFIG.groundY - 188, w: 360, h: 54, type: "tutorial", text: "DOGON TWINKA! >>>" }
+    ];
+    const backdrops = [];
+    const collectibles = [];
+    const enemies = [new TwinkChaseTarget(640, CONFIG.groundY - 70)];
+    const checkpoints = [];
+
+    for (let sectionX = 0; sectionX < 8200; sectionX += 520) {
+      this.addTownDetails(details, sectionX, 500, CONFIG.groundY, false, theme);
+    }
+
+    let obstacleX = 920;
+    while (obstacleX < 8200) {
+      const obstacleW = this.rand(38, 76);
+      const obstacleH = this.rand(34, 82);
+      platforms.push({
+        x: Math.round(obstacleX),
+        y: Math.round(CONFIG.groundY - obstacleH),
+        w: Math.round(obstacleW),
+        h: Math.round(obstacleH),
+        kind: "chaseObstacle"
+      });
+
+      if (this.random() < 0.34) {
+        this.addSingleCollectible(collectibles, obstacleX + this.rand(110, 240), CONFIG.groundY - this.rand(82, 145), speedrunMode);
+      }
+
+      obstacleX += this.rand(390, 620);
+    }
+
+    for (let x = 420; x < 8200; x += this.rand(520, 760)) {
+      if (this.random() < 0.28) this.addSingleCollectible(collectibles, x, CONFIG.groundY - this.rand(72, 135), speedrunMode);
+    }
+
+    return {
+      width,
+      platforms,
+      details,
+      backdrops,
+      collectibles,
+      enemies,
+      checkpoints,
+      finish: { x: width + 1000, y: CONFIG.groundY - 148, w: 48, h: 148 },
+      label: config.label,
+      world: config.world,
+      difficulty: config.difficulty,
+      boss: false,
+      twinkChase: true,
+      collectibleSpawnTimer: 3.6,
+      chaseGeneratedUntil: 8200,
+      escapeWarningCooldown: 0,
+      spawn: { x: 82, y: CONFIG.groundY - CONFIG.player.drawHeight }
+    };
+  }
+
+  extendTwinkChase(level, targetX, speedrunMode) {
+    const theme = level.theme || "center";
+    let x = level.chaseGeneratedUntil || 8200;
+    while (x < targetX) {
+      this.addTownDetails(level.details, x, 500, CONFIG.groundY, false, theme);
+
+      const obstacleX = x + this.rand(180, 390);
+      const obstacleW = this.rand(38, 82);
+      const obstacleH = this.rand(34, 86);
+      level.platforms.push({
+        x: Math.round(obstacleX),
+        y: Math.round(CONFIG.groundY - obstacleH),
+        w: Math.round(obstacleW),
+        h: Math.round(obstacleH),
+        kind: "chaseObstacle"
+      });
+
+      if (this.random() < 0.22) {
+        this.addSingleCollectible(level.collectibles, obstacleX + this.rand(140, 260), CONFIG.groundY - this.rand(82, 142), speedrunMode);
+      }
+
+      x += this.rand(520, 760);
+    }
+    level.chaseGeneratedUntil = x;
   }
 
   decoratePlatform(platform, collectibles, enemies, levelNumber, difficulty, speedrunMode, config = null) {
@@ -2276,6 +2437,7 @@ class UIManager {
     this.disclaimerOverlay = document.getElementById("disclaimerOverlay");
     this.menuOverlay = document.getElementById("menuOverlay");
     this.startGuideOverlay = document.getElementById("startGuideOverlay");
+    this.chaseIntroOverlay = document.getElementById("chaseIntroOverlay");
     this.loadingOverlay = document.getElementById("loadingOverlay");
     this.pauseOverlay = document.getElementById("pauseOverlay");
     this.controlsOverlay = document.getElementById("controlsOverlay");
@@ -2312,6 +2474,7 @@ class UIManager {
       game.startGuideSeen = true;
       game.startGame();
     });
+    document.getElementById("beginChaseButton")?.addEventListener("click", () => game.beginLoadedLevel());
     this.unlimitedLivesToggle.addEventListener("click", () => {
       game.unlimitedLives = !game.unlimitedLives;
       this.updateMenu();
@@ -2418,6 +2581,7 @@ class UIManager {
     this.disclaimerOverlay.classList.add("hidden");
     this.menuOverlay.classList.remove("hidden");
     this.startGuideOverlay.classList.add("hidden");
+    this.chaseIntroOverlay.classList.add("hidden");
     this.loadingOverlay.classList.add("hidden");
     this.controlsOverlay.classList.add("hidden");
     this.settingsOverlay.classList.add("hidden");
@@ -2431,6 +2595,7 @@ class UIManager {
     this.disclaimerOverlay.classList.add("hidden");
     this.menuOverlay.classList.add("hidden");
     this.startGuideOverlay.classList.remove("hidden");
+    this.chaseIntroOverlay.classList.add("hidden");
     this.loadingOverlay.classList.add("hidden");
     this.controlsOverlay.classList.add("hidden");
     this.settingsOverlay.classList.add("hidden");
@@ -2442,11 +2607,25 @@ class UIManager {
     this.disclaimerOverlay.classList.add("hidden");
     this.menuOverlay.classList.add("hidden");
     this.startGuideOverlay.classList.add("hidden");
+    this.chaseIntroOverlay.classList.add("hidden");
     this.loadingOverlay.classList.add("hidden");
     this.controlsOverlay.classList.add("hidden");
     this.settingsOverlay.classList.add("hidden");
     this.pauseOverlay.classList.add("hidden");
     this.resultOverlay.classList.add("hidden");
+  }
+
+  showChaseIntro() {
+    this.disclaimerOverlay.classList.add("hidden");
+    this.menuOverlay.classList.add("hidden");
+    this.startGuideOverlay.classList.add("hidden");
+    this.loadingOverlay.classList.add("hidden");
+    this.controlsOverlay.classList.add("hidden");
+    this.settingsOverlay.classList.add("hidden");
+    this.pauseOverlay.classList.add("hidden");
+    this.resultOverlay.classList.add("hidden");
+    this.chaseIntroOverlay.classList.remove("hidden");
+    this.updateScreenControls();
   }
 
   showShop() {
@@ -2460,6 +2639,7 @@ class UIManager {
     this.disclaimerOverlay.classList.add("hidden");
     this.menuOverlay.classList.add("hidden");
     this.startGuideOverlay.classList.add("hidden");
+    this.chaseIntroOverlay.classList.add("hidden");
     this.controlsOverlay.classList.add("hidden");
     this.settingsOverlay.classList.add("hidden");
     this.pauseOverlay.classList.add("hidden");
@@ -2853,13 +3033,15 @@ class GameManager {
     this.player.reset();
     this.hunger.reset();
     this.timer.reset();
-    this.timer.start();
     this.dimAlpha = 0;
     this.dimTarget = 0;
     this.sceneFreezeTime = null;
-    this.state = "playing";
-    this.ui.hideAll();
-    this.audio.playMusic();
+    if (this.currentLevel.twinkChase) {
+      this.state = "chaseintro";
+      this.ui.showChaseIntro();
+      return;
+    }
+    this.beginLoadedLevel();
   }
 
   generateLevel() {
@@ -2894,13 +3076,15 @@ class GameManager {
     this.player.lives = lives;
     this.hunger.reset();
     this.timer.reset();
-    this.timer.start();
     this.dimAlpha = 0;
     this.dimTarget = 0;
     this.sceneFreezeTime = null;
-    this.state = "playing";
-    this.ui.hideAll();
-    this.audio.playMusic();
+    if (this.currentLevel.twinkChase) {
+      this.state = "chaseintro";
+      this.ui.showChaseIntro();
+      return;
+    }
+    this.beginLoadedLevel();
   }
 
   skipLevel() {
@@ -2923,13 +3107,23 @@ class GameManager {
     this.player.reset();
     this.hunger.reset();
     this.timer.reset();
-    this.timer.start();
     this.dimAlpha = 0;
     this.dimTarget = 0;
     this.sceneFreezeTime = null;
+    if (this.currentLevel.twinkChase) {
+      this.state = "chaseintro";
+      this.ui.showChaseIntro();
+      return;
+    }
+    this.beginLoadedLevel();
+  }
+
+  beginLoadedLevel() {
     this.state = "playing";
     this.ui.hideAll();
+    this.timer.start();
     this.audio.playMusic();
+    this.updateTouchControlsVisibility();
   }
 
   async loadCurrentLevelAssets() {
@@ -3057,6 +3251,7 @@ class GameManager {
     this.projectiles = this.projectiles.filter((projectile) => !projectile.dead);
     if (this.finishWarningCooldown > 0) this.finishWarningCooldown -= dt;
     if (this.level.bossFight) this.updateBossArena(dt);
+    if (this.level.twinkChase) this.updateTwinkChase(dt);
 
     for (const checkpoint of this.level.checkpoints) {
       if (!checkpoint.active && Math.abs(this.player.x - checkpoint.x) < 44 && this.player.y < checkpoint.y + 110) {
@@ -3066,7 +3261,7 @@ class GameManager {
       }
     }
 
-    if (rectsOverlap(this.player.bounds, this.level.finish)) {
+    if (!this.level.twinkChase && rectsOverlap(this.player.bounds, this.level.finish)) {
       const bossAlive = this.level.boss && this.level.enemies.some((enemy) => enemy instanceof BossFlyingTrackerEnemy || enemy instanceof TestArenaBossEnemy);
       if (bossAlive) {
         if (this.finishWarningCooldown <= 0) {
@@ -3111,6 +3306,34 @@ class GameManager {
     this.level.collectibles.push(new CollectibleItem(spot.x + Math.random() * 70, spot.y - 72 - Math.random() * 32, type));
     this.addFloatingText("KCAL DROP!", spot.x + 35, spot.y - 95, "#ffd166");
     this.level.collectibleSpawnTimer = 3.2 + Math.random() * 2.4;
+  }
+
+  updateTwinkChase(dt) {
+    const twink = this.level.enemies.find((enemy) => enemy instanceof TwinkChaseTarget);
+    if (!twink) return;
+    this.levelGenerator.extendTwinkChase(this.level, this.player.x + this.canvas.width * 3.2, this.speedrunMode);
+
+    const keepAfterX = Math.max(0, this.player.x - 900);
+    const ground = this.level.platforms[0];
+    this.level.platforms = [ground, ...this.level.platforms.slice(1).filter((platform) => platform.x + platform.w > keepAfterX)];
+    this.level.details = this.level.details.filter((detail) => detail.x + detail.w > keepAfterX);
+    this.level.collectibles = this.level.collectibles.filter((item) => !item.collected && item.x + item.w > keepAfterX);
+
+    const lead = twink.x - this.player.x;
+    if (lead > 900) {
+      this.level.escapeWarningCooldown = (this.level.escapeWarningCooldown || 0) - dt;
+      if (this.level.escapeWarningCooldown <= 0) {
+        this.addFloatingText("UCIEKA!", this.player.x + this.player.w / 2, this.player.y - 38, "#ef476f");
+        this.level.escapeWarningCooldown = 1.1;
+      }
+    }
+
+    this.level.collectibleSpawnTimer = (this.level.collectibleSpawnTimer || 0) - dt;
+    if (this.level.collectibleSpawnTimer > 0 || this.level.collectibles.length >= 5) return;
+    const spawnX = this.player.x + this.canvas.width * this.levelGenerator.rand(0.52, 0.86);
+    const spawnY = CONFIG.groundY - this.levelGenerator.rand(82, 132);
+    this.levelGenerator.addSingleCollectible(this.level.collectibles, spawnX, spawnY, this.speedrunMode);
+    this.level.collectibleSpawnTimer = this.levelGenerator.rand(3.4, 5.2);
   }
 
   render() {
@@ -3391,6 +3614,19 @@ class GameManager {
       ctx.fillRect(x, y, p.w, p.h);
       ctx.fillStyle = theme === "market" ? "#d3b98f" : "#c7c1aa";
       for (let tx = x; tx < x + p.w; tx += 24) ctx.strokeRect(tx, y, 24, p.h);
+      return;
+    }
+
+    if (p.kind === "chaseObstacle") {
+      ctx.fillStyle = "#745347";
+      ctx.fillRect(x, y, p.w, p.h);
+      ctx.fillStyle = "#a77a57";
+      ctx.fillRect(x + 4, y + 4, Math.max(4, p.w - 8), 8);
+      ctx.strokeStyle = "#2e211d";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, p.w, p.h);
+      ctx.fillStyle = "rgba(255,255,255,0.16)";
+      ctx.fillRect(x + 6, y + 14, Math.max(4, p.w - 12), 3);
       return;
     }
 
