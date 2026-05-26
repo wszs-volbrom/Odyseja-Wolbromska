@@ -1,33 +1,28 @@
 "use strict";
 
-const CONFIG = {
-  width: 960,
-  height: 540,
-  gravity: 1400,
-  tile: 48,
-  groundY: 438,
-  enableDoubleJump: true,
-  debugNames: false,
-  player: {
-    speed: 220,
-    sprintSpeed: 340,
-    jumpForce: 520,
-    lives: 3,
-    drawHeight: 96,
-    invulnerability: 1.15
-  },
-  hunger: {
-    max: 2200,
-    normalDrain: 48,
-    sprintMultiplier: 3.25,
-    sprintExtraDrain: 42,
-    speedrunMultiplier: 1.25,
-    jumpCost: 35,
-    doubleJumpCost: 500
-  }
-};
+const ODYSEJA_CONFIG = window.ODYSEJA_CONFIG;
+if (!ODYSEJA_CONFIG) {
+  throw new Error("Game config failed to load. Make sure js/config.runtime.js is included before game.js.");
+}
 
-const GAME_FONT = "\"VT323\", monospace";
+const {
+  CONFIG,
+  GAME_FONT,
+  CAMPAIGN_LEVELS,
+  FUTURE_TEST_FIGHT_LEVEL,
+  THEME_PALETTES,
+  DEFAULT_SKIN_ID,
+  INITIAL_SKIN_WALLET,
+  PLAYER_SKINS,
+  PLAYER_ANIMATION_FPS,
+  COLLECTIBLE_TYPES,
+  AUDIO_ASSETS,
+  BUILDING_ASSETS,
+  PLATFORM_ASSETS,
+  UI_ASSETS,
+  ENEMY_SPRITES,
+} = ODYSEJA_CONFIG;
+
 const canvasFont = (weight, size) => `${weight} ${size}px ${GAME_FONT}`;
 
 function drawNameTag(ctx, text, x, y, size = 18) {
@@ -57,169 +52,32 @@ function drawNameTag(ctx, text, x, y, size = 18) {
   ctx.restore();
 }
 
-const CAMPAIGN_LEVELS = [
-  { label: "1-1", world: "PRZEDMIEŚCIA WOLBROMIA", difficulty: 0.08, length: 5600, boss: false, theme: "suburbs" },
-  { label: "1-2", world: "WOLBROM CENTRUM", difficulty: 0.2, length: 6400, boss: false, theme: "center" },
-  { label: "1-3", world: "OSIEDLE WOLBROM", difficulty: 0.36, length: 7200, boss: false, theme: "blocks" },
-  { label: "2-1", world: "RYNEK WOLBROM", difficulty: 0.52, length: 7600, boss: false, theme: "market" },
-  { label: "2-2", world: "RYNEK WOLBROM", difficulty: 0.7, length: 8400, boss: false, theme: "market" },
-  { label: "2-3", world: "RYNEK WOLBROM", difficulty: 0.9, length: 7000, boss: true, theme: "market" },
-  { label: "2-4", world: "ZŁAP GEJA TWINKA", difficulty: 1, length: 999999, boss: false, twinkChase: true, theme: "center" }
-];
 
-// ## Test fight for future
-// The old 2-4 TEST BOSS FIGHT prototype is intentionally preserved in generateBossArena().
-const FUTURE_TEST_FIGHT_LEVEL = { label: "2-4", world: "TEST BOSS FIGHT", difficulty: 1, length: 1280, boss: true, bossFight: true, fixedCamera: true, theme: "bossfight" };
 
-const THEME_PALETTES = {
-  suburbs: { skyTop: "#b7c9c1", skyMid: "#91a99b", skyBottom: "#6f846f", far: "rgba(84, 105, 88, 0.42)", near: "rgba(80, 95, 72, 0.62)" },
-  center: { skyTop: "#b4bdc8", skyMid: "#909aa8", skyBottom: "#6f7884", far: "rgba(90, 96, 105, 0.5)", near: "rgba(63, 68, 76, 0.7)" },
-  blocks: { skyTop: "#a9b0ba", skyMid: "#858d98", skyBottom: "#646b75", far: "rgba(78, 84, 94, 0.58)", near: "rgba(48, 54, 63, 0.76)" },
-  market: { skyTop: "#c2b9aa", skyMid: "#a99e8e", skyBottom: "#7d746b", far: "rgba(100, 82, 70, 0.5)", near: "rgba(70, 55, 49, 0.74)" },
-  bossfight: { skyTop: "#3f304d", skyMid: "#28203a", skyBottom: "#171421", far: "rgba(255, 209, 102, 0.16)", near: "rgba(239, 71, 111, 0.28)" }
-};
 
-const DEFAULT_SKIN_ID = "kloda-purple";
-const INITIAL_SKIN_WALLET = 50000;
 
-const PLAYER_SKINS = {
-  "kloda-purple": {
-    id: "kloda-purple",
-    name: "Kłoda Classic",
-    label: "Fioletowa sukienka",
-    price: 0,
-    preview: "assets/player/skins/kloda-purple/static.png",
-    sprites: {
-      idle: ["assets/player/skins/kloda-purple/static.png"],
-      walk: [
-        "assets/player/skins/kloda-purple/static.png",
-        "assets/player/skins/kloda-purple/walk1.png",
-        "assets/player/skins/kloda-purple/static.png",
-        "assets/player/skins/kloda-purple/walk2.png",
-        "assets/player/skins/kloda-purple/walk1.png"
-      ],
-      jump: ["assets/player/skins/kloda-purple/jump1.png"],
-      fall: ["assets/player/skins/kloda-purple/fall.png"],
-      sprint: [
-        "assets/player/skins/kloda-purple/walk1.png",
-        "assets/player/skins/kloda-purple/walk2.png",
-        "assets/player/skins/kloda-purple/static.png",
-        "assets/player/skins/kloda-purple/walk3.png"
-      ]
-    }
-  },
-  "tss-blue": {
-    id: "tss-blue",
-    name: "TSS Blue",
-    label: "Niebieski drip",
-    price: 12000,
-    preview: "assets/player/skins/tss-blue/static.png",
-    sprites: {
-      idle: ["assets/player/skins/tss-blue/static.png"],
-      walk: [
-        "assets/player/skins/tss-blue/static.png",
-        "assets/player/skins/tss-blue/walk.png",
-        "assets/player/skins/tss-blue/static.png",
-        "assets/player/skins/tss-blue/static.png",
-        "assets/player/skins/tss-blue/walk1.png"
-      ],
-      jump: ["assets/player/skins/tss-blue/jump1.png"],
-      fall: ["assets/player/skins/tss-blue/fall.png"],
-      sprint: [
-        "assets/player/skins/tss-blue/walk.png",
-        "assets/player/skins/tss-blue/walk1.png",
-        "assets/player/skins/tss-blue/static.png",
-        "assets/player/skins/tss-blue/walk.png"
-      ]
-    }
-  }
-};
 
-const PLAYER_ANIMATION_FPS = {
-  idle: 1,
-  walk: 8,
-  sprint: 13,
-  jump: 1,
-  fall: 1
-};
 
-const COLLECTIBLE_TYPES = [
-  { name: "Lays Chips", short: "Lays", hunger: 540, color: "#f6c44f", weight: 34, speedBoost: 0, image: "assets/collectibles/lays.png" },
-  { name: "Lindor Pralines", short: "Lindor", hunger: 230, color: "#dc4b4b", weight: 10, speedBoost: 0, image: "assets/collectibles/lindor.png" },
-  { name: "Delicje", short: "Delicje", hunger: 160, color: "#8b5cf6", weight: 20, speedBoost: 0, image: "assets/collectibles/delicje.png" },
-  { name: "Zestaw McD Powiększony", short: "McD+", hunger: 850, color: "#e07a2f", weight: 7, speedBoost: 0, image: "assets/collectibles/mcd.png" },
-  { name: "Energy Drink", short: "Coca Cola", hunger: 120, color: "#45d4ff", weight: 16, speedBoost: 5, image: "assets/collectibles/cola.png" },
-  { name: "Kinder Bueno", short: "Kinder Bueno", hunger: 200, color: "#45d4ff", weight: 16, speedBoost: 5, image: "assets/collectibles/kinder.png" },
-  { name: "Schoko Bons", short: "Szokobonsy", hunger: 420, color: "#45d4ff", weight: 16, speedBoost: 8, image: "assets/collectibles/schokobons.png" },
-  { name: "Kubełek KFC", short: "KFC", hunger: 900, color: "#ff4fd8", weight: 3, speedBoost: 0, image: "assets/collectibles/kubelek.png" }
-];
+
+
+
+
+
+
+
+
 
 const COLLECTIBLE_IMAGES = new Map();
-const ENEMY_SPRITES = {
-  volbromMouse: [
-    "assets/enemies/volbrommice-flying-1.png",
-    "assets/enemies/volbrommice-flying-2.png"
-  ]
-};
+
 const ENEMY_IMAGES = new Map();
-const UI_ASSETS = {
-  live: "assets/mobile-buttons/live.png"
-};
+
 const UI_IMAGES = new Map();
 
-// Add new audio here. Use musicBg for looping/background tracks and sfxEffects for one-shot gameplay sounds.
-const AUDIO_ASSETS = {
-  musicBg: {
-    levelLoop: "assets/audio/music-bg/gameloop-music-main.mp3"
-  },
-  sfxEffects: {
-    jump: "assets/audio/SFX-effects/kloda-jump.mp3",
-    enemyHit: "assets/audio/SFX-effects/enemy-bt.mp3",
-    enemyDefeated: "assets/audio/SFX-effects/enemy-defeated.mp3",
-    collectible: "assets/audio/SFX-effects/pysznosci.mp3",
-    hungerWarning: "assets/audio/SFX-effects/dajmijesc.mp3"
-  }
-};
 
-const BUILDING_ASSETS = {
-  center: {
-    frogshopSmall: [
-      "assets/buildings/center/frogshop-small.png",
-      "assets/buildings/center/frogshop-small2.png",
-      "assets/buildings/center/frogshop-small3.png"
-    ]
-  },
-  blocks: {
-    frogshopCity: [
-      "assets/buildings/blocks/frogshop-city.png",
-      "assets/buildings/blocks/frogshop-city2.png"
-    ]
-  },
-  suburbs: {
-    house: [
-      "assets/buildings/suburbs/lvl1house1.png",
-      "assets/buildings/suburbs/lvl1house2.png",
-      "assets/buildings/suburbs/lvl1house3.png",
-      "assets/buildings/suburbs/lvl1house4.png",
-      "assets/buildings/suburbs/lvl1house5.png",
-      "assets/buildings/suburbs/lvl1house6.png"
-    ],
-    piekarnia: ["assets/buildings/suburbs/piekarnia.png"],
-    cukiernia: ["assets/buildings/suburbs/cukiernia.png"],
-    warzywniak: ["assets/buildings/suburbs/warzywniak.png"],
-    sklepuani: ["assets/buildings/suburbs/sklepuani.png"],
-    arabskiMasaz: ["assets/buildings/suburbs/arabski-masaz.png"]
-  },
-  foliage: {
-    trees: [
-      "assets/foliage/tree01.png",
-      "assets/foliage/tree02.png",
-      "assets/foliage/tree03.png",
-      "assets/foliage/tree04.png",
-      "assets/foliage/tree05.png"
-    ]
-  }
-};
+
+
+
+
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -770,7 +628,13 @@ class LevelAssetManager {
 
   async loadForLevel(level, onProgress = () => {}) {
     const levelVisuals = [...(level.details || []), ...(level.backdrops || [])];
-    const paths = [...new Set(levelVisuals.map((detail) => detail.assetPath).filter(Boolean))];
+    const platformPaths = level.platformAssets
+      ? [...(level.platformAssets.chunks || []), ...(level.platformAssets.endings || [])]
+      : [];
+    const paths = [...new Set([
+      ...levelVisuals.map((detail) => detail.assetPath).filter(Boolean),
+      ...platformPaths
+    ])];
     this.activePaths = new Set(paths);
     if (!paths.length) {
       onProgress(1, 0, 0);
@@ -2000,7 +1864,7 @@ class ProceduralLevelGenerator {
       enemies.push(new BossFlyingTrackerEnemy(finishPlatform.x + 250, finishPlatform.y - 230));
     }
 
-    return {
+    const level = {
       width: finishPlatform.x + finishPlatform.w,
       platforms,
       details,
@@ -2014,6 +1878,13 @@ class ProceduralLevelGenerator {
       difficulty,
       boss: !!(config && config.boss)
     };
+
+    if (theme === "suburbs") {
+      level.platformSkin = "platform1";
+      level.platformAssets = PLATFORM_ASSETS.platform1;
+    }
+
+    return level;
   }
 
   generateBossArena(levelNumber, speedrunMode, config) {
@@ -2273,7 +2144,110 @@ class ProceduralLevelGenerator {
   }
 
   addBackdropDetails(backdrops, length, theme = "center") {
+    if (theme === "centerNight") {
+      const moonPath = this.pickAsset(BUILDING_ASSETS.centerNight.moon);
+      backdrops.push({
+        x: 520,
+        y: 88,
+        w: 128,
+        h: 128,
+        type: "night-moon",
+        assetPath: moonPath,
+        parallax: 0.015,
+        alpha: 0.92
+      });
+
+      for (let x = -280; x < length + 760; x += this.rand(520, 850)) {
+        const cloudH = this.rand(42, 76);
+        const cloudW = cloudH * this.rand(2.2, 3.4);
+        backdrops.push({
+          x: Math.round(x + this.rand(-80, 120)),
+          y: Math.round(this.rand(64, 165)),
+          w: Math.round(cloudW),
+          h: Math.round(cloudH),
+          type: "night-cloud",
+          assetPath: this.pickAsset(BUILDING_ASSETS.centerNight.clouds),
+          parallax: this.rand(0.08, 0.16),
+          alpha: this.rand(0.42, 0.68),
+          phase: this.rand(0, Math.PI * 2)
+        });
+      }
+
+      for (let x = -220; x < length + 760; x += this.rand(390, 540)) {
+        const flatH = this.rand(315, 440);
+        const flatW = flatH * this.rand(0.62, 0.82);
+        const baseX = Math.round(x + this.rand(-46, 46));
+        const parallax = this.rand(0.2, 0.3);
+        if (this.random() < 0.5) {
+          const treeH = this.rand(118, 190);
+          const treeW = treeH * this.rand(0.48, 0.72);
+          backdrops.push({
+            x: Math.round(baseX - treeW * this.rand(0.18, 0.5)),
+            y: Math.round(CONFIG.groundY - 16 - treeH),
+            w: Math.round(treeW),
+            h: Math.round(treeH),
+            type: "backdrop-tree",
+            assetPath: this.pickAsset(BUILDING_ASSETS.foliage.trees),
+            parallax,
+            alpha: 0.48
+          });
+        }
+        backdrops.push({
+          x: baseX,
+          y: Math.round(CONFIG.groundY - 22 - flatH),
+          w: Math.round(flatW),
+          h: Math.round(flatH),
+          type: "night-flat",
+          assetPath: this.pickAsset(BUILDING_ASSETS.centerNight.flats),
+          parallax,
+          alpha: this.rand(0.62, 0.82)
+        });
+        if (this.random() < 0.58) {
+          const treeH = this.rand(130, 210);
+          const treeW = treeH * this.rand(0.46, 0.7);
+          backdrops.push({
+            x: Math.round(baseX + flatW - treeW * this.rand(0.24, 0.62)),
+            y: Math.round(CONFIG.groundY - 12 - treeH),
+            w: Math.round(treeW),
+            h: Math.round(treeH),
+            type: "backdrop-tree",
+            assetPath: this.pickAsset(BUILDING_ASSETS.foliage.trees),
+            parallax,
+            alpha: 0.58
+          });
+        }
+      }
+      return;
+    }
+
     if (theme !== "suburbs") return;
+    backdrops.push({
+      x: 280,
+      y: CONFIG.groundY - 286,
+      w: 260,
+      h: 150,
+      type: "sunset-sun",
+      assetPath: this.pickAsset(BUILDING_ASSETS.sky.sun),
+      parallax: 0.06,
+      alpha: 0.9
+    });
+
+    for (let x = -320; x < length + 780; x += this.rand(560, 880)) {
+      const cloudH = this.rand(36, 68);
+      const cloudW = cloudH * this.rand(2.25, 3.45);
+      backdrops.push({
+        x: Math.round(x + this.rand(-120, 160)),
+        y: Math.round(this.rand(72, 178)),
+        w: Math.round(cloudW),
+        h: Math.round(cloudH),
+        type: "sunset-cloud",
+        assetPath: this.pickAsset(BUILDING_ASSETS.sky.clouds),
+        parallax: this.rand(0.1, 0.18),
+        alpha: this.rand(0.42, 0.64),
+        phase: this.rand(0, Math.PI * 2)
+      });
+    }
+
     const houseBaseline = CONFIG.groundY - 14;
     const treeBaseline = CONFIG.groundY - 8;
     for (let x = -260; x < length + 640; x += this.rand(390, 560)) {
@@ -2344,7 +2318,7 @@ class ProceduralLevelGenerator {
     if (theme === "suburbs" && label.includes("WARZ")) return this.pickAsset(BUILDING_ASSETS.suburbs.warzywniak);
     if (theme === "suburbs" && label.includes("ANI")) return this.pickAsset(BUILDING_ASSETS.suburbs.sklepuani);
     if (theme === "suburbs" && label.includes("ARAB")) return this.pickAsset(BUILDING_ASSETS.suburbs.arabskiMasaz);
-    if (theme === "center" && label.includes("ABKA")) return this.pickAsset(BUILDING_ASSETS.center.frogshopSmall);
+    if ((theme === "center" || theme === "centerNight") && label.includes("ABKA")) return this.pickAsset(BUILDING_ASSETS.center.frogshopSmall);
     if ((theme === "blocks" || theme === "market") && label.includes("ABKA")) return this.pickAsset(BUILDING_ASSETS.blocks.frogshopCity);
     return null;
   }
@@ -2752,7 +2726,8 @@ class AudioManager {
     this.musicVolume = this.loadVolume("music", 1);
     this.sfxVolume = this.loadVolume("sfx", 1);
     this.musicBaseVolume = 0.36;
-    this.music = new Audio(AUDIO_ASSETS.musicBg.levelLoop);
+    this.currentMusicSrc = AUDIO_ASSETS.musicBg.levelLoop;
+    this.music = new Audio(this.currentMusicSrc);
     this.music.loop = true;
     this.applyMusicVolume();
     this.jumpPool = this.createPool(AUDIO_ASSETS.sfxEffects.jump, 5, 0.62);
@@ -2809,6 +2784,19 @@ class AudioManager {
     this.music.volume = this.musicBaseVolume * this.musicVolume;
   }
 
+  setMusicTrack(trackKey = "levelLoop") {
+    const nextSrc = AUDIO_ASSETS.musicBg[trackKey] || AUDIO_ASSETS.musicBg.levelLoop;
+    if (this.currentMusicSrc === nextSrc) return;
+    const wasPlaying = !this.music.paused;
+    this.music.pause();
+    this.music.currentTime = 0;
+    this.currentMusicSrc = nextSrc;
+    this.music.src = nextSrc;
+    this.music.loop = true;
+    this.applyMusicVolume();
+    if (wasPlaying) this.playMusic();
+  }
+
   updateSfxVolumes() {
     const pools = [this.jumpPool, this.enemyHitPool, this.enemyDefeatedPool, this.collectiblePool, this.hungerWarningPool].filter(Boolean);
     pools.flat().forEach((sound) => {
@@ -2823,7 +2811,8 @@ class AudioManager {
     sound.play().catch(() => {});
   }
 
-  playMusic() {
+  playMusic(trackKey = null) {
+    if (trackKey) this.setMusicTrack(trackKey);
     if (!this.music.paused) return;
     this.music.play().catch(() => {
       // Browser may block audio until the next direct user gesture.
@@ -3122,7 +3111,7 @@ class GameManager {
     this.state = "playing";
     this.ui.hideAll();
     this.timer.start();
-    this.audio.playMusic();
+    this.audio.playMusic(this.currentLevel.music || "levelLoop");
     this.updateTouchControlsVisibility();
   }
 
@@ -3389,12 +3378,15 @@ class GameManager {
       return;
     }
 
-    const hasSuburbBackdrops = theme === "suburbs" && this.level && this.level.backdrops && this.level.backdrops.length;
-    if (hasSuburbBackdrops) this.renderBackdropLayer(ctx);
+    const hasGeneratedBackdrops = (theme === "suburbs" || theme === "centerNight")
+      && this.level
+      && this.level.backdrops
+      && this.level.backdrops.length;
+    if (hasGeneratedBackdrops) this.renderBackdropLayer(ctx);
 
     ctx.fillStyle = palette.far;
     const farStep = theme === "suburbs" ? 230 : 260;
-    if (!hasSuburbBackdrops) {
+    if (!hasGeneratedBackdrops) {
       for (let x = -((cam * 0.18) % farStep); x < w + farStep; x += farStep) {
         const bx = Math.round(x);
         if (theme === "suburbs") {
@@ -3481,10 +3473,31 @@ class GameManager {
       const parallax = d.parallax ?? 0.26;
       const x = Math.round(d.x - this.camera.x * parallax);
       if (x + d.w < -120 || x > this.canvas.width + 120) continue;
-      const y = Math.round(d.y - this.camera.y * 0.08);
+      const cloudBob = d.type && d.type.includes("cloud") ? Math.round(Math.sin(this.time * 0.75 + (d.phase || 0)) * 2) : 0;
+      const y = Math.round(d.y - this.camera.y * 0.08 + cloudBob);
       const assetImage = d.assetPath ? this.levelAssets.getImage(d.assetPath) : null;
       ctx.save();
       ctx.globalAlpha = d.alpha ?? 0.68;
+      if (d.type === "night-moon" || d.type === "sunset-sun") {
+        const glowX = x + d.w / 2;
+        const glowY = y + d.h / 2;
+        const glow = ctx.createRadialGradient(glowX, glowY, 10, glowX, glowY, d.w * 1.35);
+        if (d.type === "sunset-sun") {
+          glow.addColorStop(0, "rgba(255, 207, 84, 0.48)");
+          glow.addColorStop(0.45, "rgba(255, 150, 60, 0.22)");
+          glow.addColorStop(1, "rgba(255, 150, 60, 0)");
+        } else {
+          glow.addColorStop(0, "rgba(255, 246, 190, 0.42)");
+          glow.addColorStop(0.42, "rgba(255, 246, 190, 0.18)");
+          glow.addColorStop(1, "rgba(255, 246, 190, 0)");
+        }
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(glowX, glowY, d.w * 1.35, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = d.alpha ?? 0.92;
+      }
       if (assetImage) {
         this.drawAssetInBox(ctx, assetImage, x, y, d.w, d.h);
       } else {
@@ -3510,6 +3523,47 @@ class GameManager {
     for (const p of this.level.platforms) this.renderPlatform(ctx, p);
     this.renderCheckpoints(ctx);
     this.renderFinish(ctx);
+  }
+
+  drawMirroredImage(ctx, img, x, y, w, h) {
+    ctx.save();
+    ctx.translate(x + w, y);
+    ctx.scale(-1, 1);
+    ctx.drawImage(img, 0, 0, w, h);
+    ctx.restore();
+  }
+
+  renderTexturedGroundPlatform(ctx, p, x, y) {
+    const assets = this.level.platformAssets;
+    if (!assets || !assets.chunks || !assets.endings) return false;
+    const chunkImages = assets.chunks.map((path) => this.levelAssets.getImage(path)).filter(Boolean);
+    const endingImages = assets.endings.map((path) => this.levelAssets.getImage(path)).filter(Boolean);
+    if (!chunkImages.length || !endingImages.length) return false;
+
+    const visualH = Math.max(104, p.h);
+    const tileW = visualH;
+    const endW = Math.min(tileW, Math.max(32, p.w * 0.35));
+    const endImage = endingImages[Math.abs(Math.floor(p.x / 97)) % endingImages.length];
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.beginPath();
+    ctx.rect(x, y, p.w, visualH);
+    ctx.clip();
+
+    ctx.drawImage(endImage, x, y, endW, visualH);
+    this.drawMirroredImage(ctx, endImage, x + p.w - endW, y, endW, visualH);
+
+    const middleStart = x + endW - 1;
+    const middleEnd = x + p.w - endW + 1;
+    const firstTile = Math.floor((Math.max(-tileW, middleStart) - x) / tileW) * tileW + x;
+    for (let tx = firstTile; tx < middleEnd; tx += tileW) {
+      const index = Math.abs(Math.floor((p.x + tx - x) / tileW)) % chunkImages.length;
+      ctx.drawImage(chunkImages[index], Math.round(tx), y, tileW + 1, visualH);
+    }
+
+    ctx.restore();
+    return true;
   }
 
   renderDetails(ctx) {
@@ -3630,18 +3684,25 @@ class GameManager {
       return;
     }
 
+    if (p.kind === "ground" && this.level.platformSkin === "platform1" && this.renderTexturedGroundPlatform(ctx, p, x, y)) {
+      return;
+    }
+
     ctx.fillStyle = theme === "suburbs" ? "#5d634e" : theme === "market" ? "#66594d" : "#626868";
     ctx.fillRect(x, y, p.w, p.h);
     ctx.fillStyle = theme === "suburbs" ? "#9ba37f" : theme === "market" ? "#b5a28c" : "#a2a59a";
     ctx.fillRect(x, y, p.w, 18);
     ctx.strokeStyle = "#777b72";
-    for (let tx = x; tx < x + p.w; tx += CONFIG.tile) {
+    const tileStart = Math.floor((Math.max(-CONFIG.tile, x) - x) / CONFIG.tile) * CONFIG.tile + x;
+    const tileEnd = Math.min(x + p.w, this.canvas.width + CONFIG.tile);
+    for (let tx = tileStart; tx < tileEnd; tx += CONFIG.tile) {
       ctx.strokeRect(tx, y, CONFIG.tile, 18);
     }
     ctx.fillStyle = "#4b4035";
     ctx.fillRect(x, y + 18, p.w, p.h - 18);
     ctx.fillStyle = "rgba(0,0,0,0.12)";
-    for (let tx = x + 12; tx < x + p.w; tx += 64) ctx.fillRect(tx, y + 28, 30, 9);
+    const shadowStart = Math.floor((Math.max(-64, x + 12) - (x + 12)) / 64) * 64 + x + 12;
+    for (let tx = shadowStart; tx < tileEnd; tx += 64) ctx.fillRect(tx, y + 28, 30, 9);
   }
 
   renderCheckpoints(ctx) {
