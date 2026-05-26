@@ -23,34 +23,25 @@ const {
   ENEMY_SPRITES,
 } = ODYSEJA_CONFIG;
 
-const canvasFont = (weight, size) => `${weight} ${size}px ${GAME_FONT}`;
-
-function drawNameTag(ctx, text, x, y, size = 18) {
-  ctx.save();
-  ctx.font = canvasFont(800, size);
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  const padX = 8;
-  const padY = 4;
-  const metrics = ctx.measureText(text);
-  const boxW = Math.ceil(metrics.width + padX * 2);
-  const boxH = Math.ceil(size + padY * 2);
-  const boxX = Math.round(x - boxW / 2);
-  const boxY = Math.round(y - boxH);
-  ctx.fillStyle = "rgba(18, 22, 28, 0.78)";
-  ctx.strokeStyle = "#fff7dd";
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.roundRect(boxX, boxY, boxW, boxH, 4);
-  ctx.fill();
-  ctx.stroke();
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = "#201900";
-  ctx.fillStyle = "#fff7dd";
-  ctx.strokeText(text, x, boxY + boxH / 2 + 1);
-  ctx.fillText(text, x, boxY + boxH / 2 + 1);
-  ctx.restore();
+const ODYSEJA_UTILS = window.ODYSEJA_UTILS;
+if (!ODYSEJA_UTILS) {
+  throw new Error("Game utils failed to load. Make sure js/utils.runtime.js is included before game.js.");
 }
+
+const {
+  clamp,
+  lerp,
+  rectsOverlap,
+  formatTime,
+  canvasFont,
+  drawNameTag,
+  makeEdgeTransparentCanvas,
+  detectTouchDevice,
+} = ODYSEJA_UTILS;
+
+
+
+
 
 
 
@@ -79,100 +70,15 @@ const UI_IMAGES = new Map();
 
 
 
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
 
-function lerp(a, b, t) {
-  return a + (b - a) * clamp(t, 0, 1);
-}
 
-function rectsOverlap(a, b) {
-  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-}
 
-function formatTime(seconds) {
-  if (!Number.isFinite(seconds)) return "--:--.--";
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${String(mins).padStart(2, "0")}:${secs.toFixed(2).padStart(5, "0")}`;
-}
 
-function makeEdgeTransparentCanvas(img) {
-  const canvas = document.createElement("canvas");
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(img, 0, 0);
-  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const data = pixels.data;
 
-  const width = canvas.width;
-  const height = canvas.height;
-  const visited = new Uint8Array(width * height);
-  const stack = [];
-  const isBackground = (idx) => {
-    const i = idx * 4;
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-    const a = data[i + 3];
-    const greenScreen = g > 145 && r < 120 && b < 125;
-    const whiteScreen = r > 242 && g > 242 && b > 242;
-    const checkerLight = r > 226 && g > 226 && b > 226;
-    const checkerGray = Math.abs(r - g) < 5 && Math.abs(g - b) < 5 && r > 215;
-    return a < 8 || greenScreen || whiteScreen || checkerLight || checkerGray;
-  };
 
-  for (let x = 0; x < width; x += 1) {
-    stack.push(x, (height - 1) * width + x);
-  }
-  for (let y = 0; y < height; y += 1) {
-    stack.push(y * width, y * width + width - 1);
-  }
 
-  while (stack.length) {
-    const idx = stack.pop();
-    if (visited[idx] || !isBackground(idx)) continue;
-    visited[idx] = 1;
-    data[idx * 4 + 3] = 0;
-    const x = idx % width;
-    const y = Math.floor(idx / width);
-    if (x > 0) stack.push(idx - 1);
-    if (x < width - 1) stack.push(idx + 1);
-    if (y > 0) stack.push(idx - width);
-    if (y < height - 1) stack.push(idx + width);
-  }
 
-  ctx.putImageData(pixels, 0, 0);
 
-  let minX = width;
-  let minY = height;
-  let maxX = 0;
-  let maxY = 0;
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      if (data[(y * width + x) * 4 + 3] > 12) {
-        minX = Math.min(minX, x);
-        minY = Math.min(minY, y);
-        maxX = Math.max(maxX, x);
-        maxY = Math.max(maxY, y);
-      }
-    }
-  }
-  if (minX > maxX || minY > maxY) return canvas;
-
-  const padding = 2;
-  minX = Math.max(0, minX - padding);
-  minY = Math.max(0, minY - padding);
-  maxX = Math.min(width - 1, maxX + padding);
-  maxY = Math.min(height - 1, maxY + padding);
-  const trimmed = document.createElement("canvas");
-  trimmed.width = maxX - minX + 1;
-  trimmed.height = maxY - minY + 1;
-  trimmed.getContext("2d").drawImage(canvas, minX, minY, trimmed.width, trimmed.height, 0, 0, trimmed.width, trimmed.height);
-  return trimmed;
-}
 
 class InputManager {
   constructor() {
@@ -607,14 +513,7 @@ class SpriteLoader {
   }
 }
 
-function detectTouchDevice() {
-  return Boolean(
-    (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) ||
-    "ontouchstart" in window ||
-    (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
-    window.innerWidth <= 760
-  );
-}
+
 
 class LevelAssetManager {
   constructor() {
@@ -628,13 +527,7 @@ class LevelAssetManager {
 
   async loadForLevel(level, onProgress = () => {}) {
     const levelVisuals = [...(level.details || []), ...(level.backdrops || [])];
-    const platformPaths = level.platformAssets
-      ? [...(level.platformAssets.chunks || []), ...(level.platformAssets.endings || [])]
-      : [];
-    const paths = [...new Set([
-      ...levelVisuals.map((detail) => detail.assetPath).filter(Boolean),
-      ...platformPaths
-    ])];
+    const paths = [...new Set(levelVisuals.map((detail) => detail.assetPath).filter(Boolean))];
     this.activePaths = new Set(paths);
     if (!paths.length) {
       onProgress(1, 0, 0);
@@ -1878,11 +1771,6 @@ class ProceduralLevelGenerator {
       difficulty,
       boss: !!(config && config.boss)
     };
-
-    if (theme === "suburbs") {
-      level.platformSkin = "platform1";
-      level.platformAssets = PLATFORM_ASSETS.platform1;
-    }
 
     return level;
   }
@@ -3525,47 +3413,6 @@ class GameManager {
     this.renderFinish(ctx);
   }
 
-  drawMirroredImage(ctx, img, x, y, w, h) {
-    ctx.save();
-    ctx.translate(x + w, y);
-    ctx.scale(-1, 1);
-    ctx.drawImage(img, 0, 0, w, h);
-    ctx.restore();
-  }
-
-  renderTexturedGroundPlatform(ctx, p, x, y) {
-    const assets = this.level.platformAssets;
-    if (!assets || !assets.chunks || !assets.endings) return false;
-    const chunkImages = assets.chunks.map((path) => this.levelAssets.getImage(path)).filter(Boolean);
-    const endingImages = assets.endings.map((path) => this.levelAssets.getImage(path)).filter(Boolean);
-    if (!chunkImages.length || !endingImages.length) return false;
-
-    const visualH = Math.max(104, p.h);
-    const tileW = visualH;
-    const endW = Math.min(tileW, Math.max(32, p.w * 0.35));
-    const endImage = endingImages[Math.abs(Math.floor(p.x / 97)) % endingImages.length];
-
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    ctx.beginPath();
-    ctx.rect(x, y, p.w, visualH);
-    ctx.clip();
-
-    ctx.drawImage(endImage, x, y, endW, visualH);
-    this.drawMirroredImage(ctx, endImage, x + p.w - endW, y, endW, visualH);
-
-    const middleStart = x + endW - 1;
-    const middleEnd = x + p.w - endW + 1;
-    const firstTile = Math.floor((Math.max(-tileW, middleStart) - x) / tileW) * tileW + x;
-    for (let tx = firstTile; tx < middleEnd; tx += tileW) {
-      const index = Math.abs(Math.floor((p.x + tx - x) / tileW)) % chunkImages.length;
-      ctx.drawImage(chunkImages[index], Math.round(tx), y, tileW + 1, visualH);
-    }
-
-    ctx.restore();
-    return true;
-  }
-
   renderDetails(ctx) {
     for (const d of this.level.details) {
       const parallax = d.type === "tutorial" ? 1 : d.parallax ?? 0.84;
@@ -3684,25 +3531,73 @@ class GameManager {
       return;
     }
 
-    if (p.kind === "ground" && this.level.platformSkin === "platform1" && this.renderTexturedGroundPlatform(ctx, p, x, y)) {
-      return;
+    const isSuburbs = theme === "suburbs";
+    const isMarket = theme === "market";
+    const topColor = isSuburbs ? "#58c13c" : isMarket ? "#c7aa77" : "#9aa39a";
+    const topEdge = isSuburbs ? "#8fe25f" : isMarket ? "#dec48f" : "#c0c8bd";
+    const dirtColor = isSuburbs ? "#4b3628" : isMarket ? "#58483c" : "#4c4d47";
+    const dirtShade = isSuburbs ? "#38291f" : isMarket ? "#44372e" : "#3a3c38";
+    const brickColor = isSuburbs ? "rgba(35, 24, 18, 0.2)" : "rgba(0,0,0,0.16)";
+
+    ctx.save();
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(x, y, p.w, p.h, 12);
+    } else {
+      ctx.rect(x, y, p.w, p.h);
+    }
+    ctx.clip();
+
+    const dirtGradient = ctx.createLinearGradient(0, y + 18, 0, y + p.h);
+    dirtGradient.addColorStop(0, dirtColor);
+    dirtGradient.addColorStop(1, dirtShade);
+    ctx.fillStyle = dirtGradient;
+    ctx.fillRect(x, y, p.w, p.h);
+
+    ctx.fillStyle = topColor;
+    ctx.fillRect(x, y, p.w, 20);
+    ctx.fillStyle = topEdge;
+    ctx.fillRect(x, y, p.w, 6);
+
+    if (isSuburbs) {
+      ctx.fillStyle = "#307c23";
+      const grassStart = Math.floor((Math.max(-18, x) - x) / 18) * 18 + x;
+      for (let gx = grassStart; gx < x + p.w + 18; gx += 18) {
+        const bladeH = 5 + Math.abs(Math.floor((p.x + gx) % 9));
+        ctx.fillRect(gx + 3, y + 15, 3, bladeH);
+        ctx.fillRect(gx + 10, y + 13, 3, Math.max(4, bladeH - 2));
+      }
+      ctx.fillStyle = "#f6d34e";
+      const flowerStart = Math.floor((Math.max(-130, x) - x) / 130) * 130 + x + 34;
+      for (let fx = flowerStart; fx < x + p.w; fx += 130) {
+        if (Math.abs(Math.floor((p.x + fx) / 130)) % 3 === 0) {
+          ctx.fillRect(fx, y + 7, 3, 3);
+          ctx.fillRect(fx + 2, y + 5, 3, 3);
+        }
+      }
     }
 
-    ctx.fillStyle = theme === "suburbs" ? "#5d634e" : theme === "market" ? "#66594d" : "#626868";
-    ctx.fillRect(x, y, p.w, p.h);
-    ctx.fillStyle = theme === "suburbs" ? "#9ba37f" : theme === "market" ? "#b5a28c" : "#a2a59a";
-    ctx.fillRect(x, y, p.w, 18);
-    ctx.strokeStyle = "#777b72";
+    ctx.strokeStyle = isSuburbs ? "rgba(28, 91, 24, 0.55)" : "#777b72";
     const tileStart = Math.floor((Math.max(-CONFIG.tile, x) - x) / CONFIG.tile) * CONFIG.tile + x;
     const tileEnd = Math.min(x + p.w, this.canvas.width + CONFIG.tile);
     for (let tx = tileStart; tx < tileEnd; tx += CONFIG.tile) {
-      ctx.strokeRect(tx, y, CONFIG.tile, 18);
+      ctx.strokeRect(tx, y, CONFIG.tile, 20);
     }
-    ctx.fillStyle = "#4b4035";
-    ctx.fillRect(x, y + 18, p.w, p.h - 18);
-    ctx.fillStyle = "rgba(0,0,0,0.12)";
+
+    ctx.fillStyle = brickColor;
     const shadowStart = Math.floor((Math.max(-64, x + 12) - (x + 12)) / 64) * 64 + x + 12;
-    for (let tx = shadowStart; tx < tileEnd; tx += 64) ctx.fillRect(tx, y + 28, 30, 9);
+    for (let tx = shadowStart; tx < tileEnd; tx += 64) {
+      ctx.fillRect(tx, y + 32, 30, 9);
+      ctx.fillRect(tx + 42, y + 64, 22, 7);
+    }
+    ctx.restore();
+
+    ctx.strokeStyle = isSuburbs ? "rgba(180, 242, 114, 0.65)" : "rgba(255,255,255,0.16)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, y + 20);
+    ctx.lineTo(x + p.w, y + 20);
+    ctx.stroke();
   }
 
   renderCheckpoints(ctx) {
