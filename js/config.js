@@ -31,7 +31,7 @@ export const CONFIG = {
 export const GAME_FONT = "\"VT323\", monospace";
 
 export const CAMPAIGN_LEVELS = [
-  { label: "1-1", world: "PRZEDMIEŚCIA WOLBROMIA", difficulty: 0.08, length: 5600, boss: false, theme: "suburbs" },
+  { label: "1-1", world: "PRZEDMIEŚCIA WOLBROMIA", difficulty: 0.08, length: 9000, boss: false, theme: "suburbs" },
   { label: "1-2", world: "WOLBROM CENTRUM", difficulty: 0.2, length: 6400, boss: false, theme: "centerNight", music: "lonelyJourney" },
   { label: "1-3", world: "OSIEDLE WOLBROM", difficulty: 0.36, length: 7200, boss: false, theme: "blocks" },
   { label: "2-1", world: "RYNEK WOLBROM", difficulty: 0.52, length: 7600, boss: false, theme: "market" },
@@ -232,5 +232,16 @@ export const ENEMY_SPRITES = {
   volbromMouse: [
     "assets/enemies/volbrommice-flying-1.png",
     "assets/enemies/volbrommice-flying-2.png"
+  ],
+  fitInfluencerWalk: [
+    "assets/enemies/fitinflu1.png",
+    "assets/enemies/fitinflu2.png"
+  ],
+  fitInfluencerThrow: [
+    "assets/enemies/fitinflu3.png",
+    "assets/enemies/fitinflu4.png"
+  ],
+  ozempic: [
+    "assets/enemies/ozempic.png"
   ]
 };
