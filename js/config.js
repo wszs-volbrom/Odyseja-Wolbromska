@@ -37,7 +37,9 @@ export const CAMPAIGN_LEVELS = [
   { label: "2-1", world: "RYNEK WOLBROM", difficulty: 0.52, length: 7600, boss: false, theme: "market" },
   { label: "2-2", world: "RYNEK WOLBROM", difficulty: 0.7, length: 8400, boss: false, theme: "market" },
   { label: "2-3", world: "RYNEK WOLBROM", difficulty: 0.9, length: 7000, boss: true, theme: "market" },
-  { label: "2-4", world: "ZŁAP GEJA TWINKA", difficulty: 1, length: 999999, boss: false, twinkChase: true, theme: "center" }
+  { label: "2-4", world: "ZŁAP GEJA TWINKA", difficulty: 1, length: 999999, boss: false, twinkChase: true, theme: "center" },
+  { label: "3-1", world: "BUS DO KRAKOWA", difficulty: 1.1, length: 16000, boss: false, mode: "busRide", theme: "busRoute", route: "WOLBROM -> KRAKÓW", requiresCompletedLevel: "2-4" },
+  { label: "3-1B", world: "WOLBROM -> KRAKÓW", difficulty: 1.15, length: 24000, boss: false, mode: "trainRide", theme: "trainRoute", route: "WOLBROM -> KRAKÓW", requiresCompletedLevel: "2-4" }
 ];
 
 // ## Test fight for future
@@ -50,7 +52,9 @@ export const THEME_PALETTES = {
   centerNight: { skyTop: "#171d2d", skyMid: "#252f44", skyBottom: "#4d5c68", far: "rgba(29, 37, 52, 0.58)", near: "rgba(33, 43, 55, 0.72)" },
   blocks: { skyTop: "#a9b0ba", skyMid: "#858d98", skyBottom: "#646b75", far: "rgba(78, 84, 94, 0.58)", near: "rgba(48, 54, 63, 0.76)" },
   market: { skyTop: "#c2b9aa", skyMid: "#a99e8e", skyBottom: "#7d746b", far: "rgba(100, 82, 70, 0.5)", near: "rgba(70, 55, 49, 0.74)" },
-  bossfight: { skyTop: "#3f304d", skyMid: "#28203a", skyBottom: "#171421", far: "rgba(255, 209, 102, 0.16)", near: "rgba(239, 71, 111, 0.28)" }
+  bossfight: { skyTop: "#3f304d", skyMid: "#28203a", skyBottom: "#171421", far: "rgba(255, 209, 102, 0.16)", near: "rgba(239, 71, 111, 0.28)" },
+  busRoute: { skyTop: "#aebbc4", skyMid: "#8fa09c", skyBottom: "#6c786f", far: "rgba(92, 102, 96, 0.48)", near: "rgba(44, 54, 50, 0.72)" },
+  trainRoute: { skyTop: "#56b8ff", skyMid: "#8ad0ff", skyBottom: "#c9e5df", far: "rgba(52, 90, 93, 0.18)", near: "rgba(44, 84, 55, 0.68)" }
 };
 
 export const DEFAULT_SKIN_ID = "kloda-purple";

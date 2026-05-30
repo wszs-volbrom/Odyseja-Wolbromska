@@ -9,11 +9,19 @@
 
   const { CONFIG, THEME_PALETTES } = ODYSEJA_CONFIG;
   const { clamp, canvasFont } = ODYSEJA_UTILS;
-  function renderGameFrame(game) {
-      const ctx = game.ctx;
-      const renderTime = game.sceneFreezeTime ?? game.time;
-      ctx.clearRect(0, 0, game.canvas.width, game.canvas.height);
-      game.renderBackground(ctx);
+function renderGameFrame(game) {
+    const ctx = game.ctx;
+    const renderTime = game.sceneFreezeTime ?? game.time;
+    ctx.clearRect(0, 0, game.canvas.width, game.canvas.height);
+    if (game.currentLevel?.mode === "busRide" && game.busRide) {
+      game.busRide.render(ctx, game);
+      return;
+    }
+    if (game.currentLevel?.mode === "trainRide" && game.trainRide) {
+      game.trainRide.render(ctx, game);
+      return;
+    }
+    game.renderBackground(ctx);
       game.renderWorld(ctx);
       game.level.collectibles.forEach((item) => item.render(ctx, game.camera, renderTime));
       game.level.enemies.forEach((enemy) => enemy.render(ctx, game.camera));

@@ -96,6 +96,40 @@
       if (!ids.includes(DEFAULT_SKIN_ID)) ids.unshift(DEFAULT_SKIN_ID);
       SaveSystem.storageSet("odysejaWolbromska.ownedSkins", ids.join(","));
     }
+
+    static getCompletedLevels() {
+      const raw = SaveSystem.storageGet("odysejaWolbromska.completedLevels", "[]");
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.filter((label) => typeof label === "string");
+      } catch {
+        // Older or corrupted values should not block campaign progress reads.
+      }
+      return String(raw)
+        .split(",")
+        .map((label) => label.trim())
+        .filter(Boolean);
+    }
+
+    static markLevelCompleted(label) {
+      if (!label) return false;
+      const completed = new Set(SaveSystem.getCompletedLevels());
+      completed.add(label);
+      return SaveSystem.storageSet("odysejaWolbromska.completedLevels", JSON.stringify([...completed]));
+    }
+
+    static hasCompletedLevel(label) {
+      return SaveSystem.getCompletedLevels().includes(label);
+    }
+
+    static getHighestUnlockedLevel() {
+      return SaveSystem.storageGet("odysejaWolbromska.highestUnlockedLevel", "1-1");
+    }
+
+    static setHighestUnlockedLevel(label) {
+      if (!label) return false;
+      return SaveSystem.storageSet("odysejaWolbromska.highestUnlockedLevel", label);
+    }
   }
 
   window.ODYSEJA_SAVE = Object.freeze({

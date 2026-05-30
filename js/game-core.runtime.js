@@ -114,6 +114,18 @@ if (!ODYSEJA_PROCEDURAL) {
 }
 
 const { ProceduralLevelGenerator } = ODYSEJA_PROCEDURAL;
+const ODYSEJA_BUS = window.ODYSEJA_BUS;
+if (!ODYSEJA_BUS) {
+  throw new Error("Bus ride system failed to load. Make sure js/bus.runtime.js is included before game.js.");
+}
+
+const { BusRideLevelSystem } = ODYSEJA_BUS;
+const ODYSEJA_TRAIN = window.ODYSEJA_TRAIN;
+if (!ODYSEJA_TRAIN) {
+  throw new Error("Train ride system failed to load. Make sure js/train.runtime.js is included before game.js.");
+}
+
+const { TrainRideLevelSystem } = ODYSEJA_TRAIN;
 const ODYSEJA_RENDERING = window.ODYSEJA_RENDERING;
 if (!ODYSEJA_RENDERING) {
   throw new Error("Rendering helpers failed to load. Make sure js/rendering.runtime.js is included before game.js.");
@@ -535,6 +547,8 @@ class GameManager {
     this.levelNumber = 1;
     this.currentLevel = getCampaignLevel(this.levelIndex);
     this.level = this.levelGenerator.generate(1, false, this.currentLevel);
+    this.busRide = null;
+    this.trainRide = null;
     this.state = "menu";
     this.startGuideSeen = false;
     this.unlimitedLives = false;
@@ -687,6 +701,61 @@ class GameManager {
   generateLevel() {
     this.currentLevel = getCampaignLevel(this.levelIndex);
     this.levelNumber = this.levelIndex + 1;
+    if (this.currentLevel.requiresCompletedLevel && !SaveSystem.hasCompletedLevel(this.currentLevel.requiresCompletedLevel)) {
+      this.state = "complete";
+      this.ui.showResult("Poziom zablokowany", "Najpierw ukończ poziom 2-4.", false);
+      return;
+    }
+    if (this.currentLevel.mode === "busRide") {
+      this.level = {
+        width: this.currentLevel.length,
+        platforms: [],
+        collectibles: [],
+        enemies: [],
+        details: [],
+        backdrops: [],
+        checkpoints: [],
+        finish: { x: this.currentLevel.length, y: CONFIG.groundY - 120, w: 80, h: 120 },
+        spawn: { x: 82, y: CONFIG.groundY - this.player.h }
+      };
+      this.busRide = new BusRideLevelSystem(this.currentLevel, this.canvas);
+      this.trainRide = null;
+      this.camera.x = 0;
+      this.camera.y = 0;
+      this.floatingTexts = [];
+      this.projectiles = [];
+      this.finishWarningCooldown = 0;
+      this.dimAlpha = 0;
+      this.dimTarget = 0;
+      this.sceneFreezeTime = null;
+      return;
+    }
+    if (this.currentLevel.mode === "trainRide") {
+      this.level = {
+        width: this.currentLevel.length,
+        platforms: [],
+        collectibles: [],
+        enemies: [],
+        checkpoints: [],
+        details: [],
+        decorativeBuildings: [],
+        finish: { x: this.currentLevel.length - 120, y: CONFIG.groundY - 120, w: 42, h: 120 },
+        spawn: { x: 82, y: CONFIG.groundY - this.player.h }
+      };
+      this.trainRide = new TrainRideLevelSystem(this.currentLevel, this.canvas);
+      this.busRide = null;
+      this.camera.x = 0;
+      this.camera.y = 0;
+      this.floatingTexts = [];
+      this.projectiles = [];
+      this.finishWarningCooldown = 0;
+      this.dimAlpha = 0;
+      this.dimTarget = 0;
+      this.sceneFreezeTime = null;
+      return;
+    }
+    this.busRide = null;
+    this.trainRide = null;
     this.levelGenerator = new ProceduralLevelGenerator(Date.now() + this.levelNumber * 99991);
     this.level = this.levelGenerator.generate(this.levelNumber, this.speedrunMode, this.currentLevel);
     this.camera.x = 0;
@@ -704,7 +773,13 @@ class GameManager {
   }
 
   async nextLevel() {
-    this.levelIndex = getNextCampaignLevelIndex(this.levelIndex);
+    const nextIndex = getNextCampaignLevelIndex(this.levelIndex);
+    const nextLevel = getCampaignLevel(nextIndex);
+    if (nextLevel.requiresCompletedLevel && !SaveSystem.hasCompletedLevel(nextLevel.requiresCompletedLevel)) {
+      this.ui.showResult("Poziom zablokowany", "Najpierw ukończ poziom 2-4.", false);
+      return;
+    }
+    this.levelIndex = nextIndex;
     this.collectedCount = 0;
     this.currentLevel = getCampaignLevel(this.levelIndex);
     this.state = "loading";
@@ -767,6 +842,10 @@ class GameManager {
   }
 
   async loadCurrentLevelAssets() {
+    if (this.currentLevel.mode === "busRide" || this.currentLevel.mode === "trainRide") {
+      this.ui.updateLoading(1, 0, 0);
+      return;
+    }
     await this.levelAssets.loadForLevel(this.level, (progress, done, total) => {
       this.ui.updateLoading(progress, done, total);
     });
@@ -811,7 +890,7 @@ class GameManager {
     }
   }
 
-  gameOver() {
+  gameOver(message = "NIE UDAŁO CI SIĘ DOTRZEĆ DO DUBAJU.") {
     this.state = "gameover";
     this.timer.stop();
     this.audio.pauseMusic();
@@ -819,7 +898,7 @@ class GameManager {
     this.sceneFreezeTime = this.time;
     this.ui.showResult(
       "Game Over",
-      `NIE UDAŁO CI SIĘ DOTRZEĆ DO DUBAJU.<br>Czas: ${formatTime(this.timer.time)}<br>Skonsumowane: ${this.consumedKcal} kcal<br>Pyszności: ${this.collectedCount}`,
+      `${message}<br>Czas: ${formatTime(this.timer.time)}<br>Skonsumowane: ${this.consumedKcal} kcal<br>Pyszności: ${this.collectedCount}`,
       false
     );
   }
@@ -839,6 +918,10 @@ class GameManager {
     this.audio.pauseMusic();
     this.dimTarget = 0.74;
     this.sceneFreezeTime = this.time;
+    SaveSystem.markLevelCompleted(this.currentLevel.label);
+    if (this.currentLevel.label === "2-4") SaveSystem.setHighestUnlockedLevel("3-1");
+    if (this.currentLevel.label === "3-1") SaveSystem.setHighestUnlockedLevel("3-1B");
+    if (this.currentLevel.label === "3-1B") SaveSystem.setHighestUnlockedLevel("3-1B");
     const bestBefore = SaveSystem.getBestTime(this.speedrunMode);
     const newRecord = SaveSystem.setBestTime(this.speedrunMode, this.timer.time);
     const bestAfter = SaveSystem.getBestTime(this.speedrunMode);
@@ -871,6 +954,14 @@ class GameManager {
 
   update(dt) {
     this.timer.update(dt);
+    if (this.currentLevel.mode === "busRide" && this.busRide) {
+      this.busRide.update(dt, this);
+      return;
+    }
+    if (this.currentLevel.mode === "trainRide" && this.trainRide) {
+      this.trainRide.update(dt, this);
+      return;
+    }
     this.player.update(dt);
     if (this.level.fixedCamera) {
       this.camera.x = 0;
